@@ -119,6 +119,7 @@ app.*.symbols
 !/dev/ci/**/Gemfile.lock
 
 # Python ve Yapay Zeka (AI / Backend) Dosyaları
+.env
 venv/
 env/
 __pycache__/
@@ -132,6 +133,7 @@ __pycache__/
 *.onnx
 chroma/
 .chroma/
+backend/data/
 
 # Test için kullandığın CV'ler (Yüzlerce PDF veya Word dosyası varsa Git'i yorar)
 *.pdf

@@ -7,7 +7,6 @@ import os
 
 from app.services.parser import extract_text_from_pdf
 from app.services.extractor import extract_skills
-from app.services.scorer import calculate_ats_score
 from app.services.matcher import calculate_job_match, refresh_embeddings
 from app.services.ai_service import generate_career_advice
 from app.services.job_api import fetch_real_jobs
@@ -46,9 +45,9 @@ async def upload_cv(file: UploadFile = File(...)):
         raw_text = extract_text_from_pdf(file_bytes)
         extracted_skills = extract_skills(raw_text)
 
-        # Çıkarılan yetenekleri yerel bir dosyaya kaydet
+        # Çıkarılan yetenekleri ve ham metni yerel bir dosyaya kaydet
         with open(PROFILE_FILE, "w", encoding="utf-8") as f:
-            json.dump({"skills": extracted_skills}, f)
+            json.dump({"skills": extracted_skills, "raw_text": raw_text}, f)
 
         return {"message": "CV başarıyla kaydedildi.", "skills": extracted_skills}
     except Exception as e:
@@ -56,7 +55,7 @@ async def upload_cv(file: UploadFile = File(...)):
 
 
 @app.get("/api/v1/matches")
-async def get_matches(skills: str | None = None):
+async def get_matches(skills: str | None = None, country: str = "ALL", skip: int = 0, limit: int = 20):
     """Kullanıcının yeteneklerine göre iş ilanı eşleşmelerini döndürür."""
     # Kayıtlı CV yeteneklerini oku
     if skills:
@@ -69,10 +68,13 @@ async def get_matches(skills: str | None = None):
         with open(PROFILE_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
             user_skills = data.get("skills", [])
+            raw_text = data.get("raw_text", "")
 
-    all_matches = calculate_job_match(user_skills)
+    raw_text = " ".join(user_skills)
+
+    total_matches, all_matches = calculate_job_match(user_skills, raw_text, country, skip, limit)
     response = {
-        "total_jobs": len(all_matches),
+        "total": total_matches,
         "matches": all_matches,
     }
     return JSONResponse(
@@ -82,13 +84,14 @@ async def get_matches(skills: str | None = None):
 
 
 @app.get("/api/v1/jobs")
-def get_all_jobs(page: int = 1, page_size: int = 50):
+def get_all_jobs(skip: int = 0, limit: int = 50):
     """SQLite'tan sayfalanmış iş ilanlarını döndürür."""
-    total, jobs = job_repository.list_jobs(page=page, page_size=page_size)
+    page = (skip // limit) + 1 if limit > 0 else 1
+    total, jobs = job_repository.list_jobs(page=page, page_size=limit)
     return {
         "total": total,
-        "page": page,
-        "page_size": page_size,
+        "skip": skip,
+        "limit": limit,
         "last_refresh": job_repository.last_refresh_at(),
         "jobs": jobs,
     }
@@ -121,7 +124,7 @@ def ingest_jobs():
 
 
 @app.post("/api/v1/analyze-cv")
-async def analyze_cv_endpoint(file: UploadFile = File(...)):
+async def analyze_cv_endpoint(file: UploadFile = File(...), country: str = "ALL"):
     """Tam CV analiz pipeline'ı: PDF → yetenek çıkarma → ATS skoru → eşleştirme → AI koçluk."""
     if not file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Sadece PDF formatı desteklenmektedir.")
@@ -139,13 +142,17 @@ async def analyze_cv_endpoint(file: UploadFile = File(...)):
         # /matches endpoint'i aynı CV yeteneklerini kullanarak daha sonra
         # güncel ilanları eşleştirebilsin diye profili kaydet.
         with open(PROFILE_FILE, "w", encoding="utf-8") as profile_file:
-            json.dump({"skills": extracted_skills}, profile_file)
+            json.dump({"skills": extracted_skills, "raw_text": raw_text}, profile_file)
 
-        # 4. ATS Skoru Hesapla (scorer.py)
-        ats_result = calculate_ats_score(extracted_skills, raw_text)
+        # 4. İş Eşleştirmesi Yap (matcher.py)
+        # Sadece en iyi 3 eşleşme için limit veriyoruz
+        _, job_matches = calculate_job_match(extracted_skills, raw_text, country, limit=3)
 
-        # 5. İş Eşleştirmesi Yap (matcher.py)
-        job_matches = calculate_job_match(extracted_skills)
+        # 5. ATS Skoru Al (En iyi eşleşen ilan üzerinden)
+        if job_matches:
+            ats_result = job_matches[0]["ats_details"]
+        else:
+            ats_result = {"ats_score": 0, "matched_skills": [], "missing_skills": [], "details": {}}
 
         # 6. AI Kariyer Tavsiyesi Al (ai_service.py)
         # Sadece en iyi eşleşen ilan için tavsiye üretiyoruz
@@ -157,7 +164,7 @@ async def analyze_cv_endpoint(file: UploadFile = File(...)):
             "data": {
                 "parsed_skills": extracted_skills,
                 "ats_score": ats_result,
-                "job_matches": job_matches[:3],  # Sadece en iyi 3 eşleşme
+                "job_matches": job_matches,
                 "career_advice": career_advice,
             },
         }

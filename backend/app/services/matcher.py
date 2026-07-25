@@ -4,13 +4,14 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 
 from app.services import job_repository
+from app.services.scorer import calculate_ats_score
 
 # ---------------------------------------------------------------------------
 # Model ve Kalıcı ChromaDB Başlatma
 # ---------------------------------------------------------------------------
 
 # Embedding modeli (import sırasında bir kez yüklenir)
-_model = SentenceTransformer('all-MiniLM-L6-v2')
+_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
 
 # ChromaDB'yi bellekte değil, diskte kalıcı olarak saklıyoruz.
 # Böylece her istekte yeniden embedding hesaplamaya gerek kalmaz.
@@ -39,14 +40,24 @@ def refresh_embeddings() -> int:
         print("[*] SQLite'ta ilan yok; embedding oluşturulacak bir şey bulunamadı.")
         return 0
 
-    # Mevcut koleksiyonu temizle ve yeniden doldur
-    existing = _collection.get()
-    if existing["ids"]:
-        _collection.delete(ids=existing["ids"])
+    # Metadata şeması değiştiği için eski koleksiyonu tamamen silip yeniden oluşturuyoruz
+    global _collection
+    try:
+        _chroma_client.delete_collection("job_postings")
+    except ValueError:
+        pass
+    
+    _collection = _chroma_client.get_or_create_collection(
+        name="job_postings",
+        metadata={"hnsw:space": "cosine"},
+    )
 
     ids = [job["id"] for job in jobs]
-    documents = [" ".join(job.get("required_skills", ["Bilişim"])) for job in jobs]
-    metadatas = [{"title": job["title"], "company": job["company"]} for job in jobs]
+    documents = [
+        f"{job.get('title', '')} {job.get('description', '')} {' '.join(job.get('required_skills', []))}"
+        for job in jobs
+    ]
+    metadatas = [{"title": job["title"], "company": job["company"], "country": job["country"]} for job in jobs]
     embeddings = _model.encode(documents).tolist()
 
     _collection.add(
@@ -63,7 +74,7 @@ def refresh_embeddings() -> int:
 # İş Eşleştirme (her /matches isteğinde çağrılır — hızlı, API çağrısı yok)
 # ---------------------------------------------------------------------------
 
-def calculate_job_match(cv_skills: list) -> list:
+def calculate_job_match(cv_skills: list, cv_text: str = "", country: str = "ALL", skip: int = 0, limit: int = 20) -> tuple[int, list]:
     """CV yeteneklerini SQLite'taki ilanlarla ChromaDB üzerinden eşleştirir.
 
     Canlı API çağrısı YAPMAZ. Veriler ingest sırasında doldurulmuş
@@ -76,15 +87,33 @@ def calculate_job_match(cv_skills: list) -> list:
     total_in_db = _collection.count()
     if total_in_db == 0:
         print("[!] ChromaDB boş — önce /api/v1/jobs/ingest çağrılmalı.")
-        return []
+        return 0, []
 
     # CV'yi embed et ve ChromaDB'de ara
-    cv_text = " ".join(cv_skills)
-    cv_embedding = _model.encode([cv_text]).tolist()
+    combined_text = f"{cv_text} {' '.join(cv_skills)}".strip()
+    if not combined_text:
+        return 0, []
+    cv_embedding = _model.encode([combined_text]).tolist()
+
+    where_filter = {}
+    if country and country.upper() != "ALL":
+        where_filter = {"country": country.upper()}
+
+    # Toplam sayıyı hesaplamak için (Filtreye göre)
+    total_matches = total_in_db
+    if where_filter:
+        filtered = _collection.get(where=where_filter, include=[])
+        total_matches = len(filtered["ids"]) if filtered and filtered["ids"] else 0
+
+    # ChromaDB'de ara (skip + limit kadar getir, slicing ile skip'i atla)
+    n_results = min(skip + limit, total_matches)
+    if n_results == 0:
+        return 0, []
 
     results = _collection.query(
         query_embeddings=cv_embedding,
-        n_results=total_in_db,
+        n_results=n_results,
+        where=where_filter if where_filter else None,
     )
 
     # SQLite'tan tam ilan bilgilerini al (location, skills vs.)
@@ -93,10 +122,18 @@ def calculate_job_match(cv_skills: list) -> list:
 
     match_results = []
     if results["ids"] and len(results["ids"][0]) > 0:
-        for i in range(len(results["ids"][0])):
-            job_id = results["ids"][0][i]
-            metadata = results["metadatas"][0][i]
-            distance = results["distances"][0][i]
+        # ChromaDB sonuçları zaten uzaklığa (distances) göre küçükten büyüğe sıralıdır.
+        # Bu da en yüksek benzerlik (kosinüs) skorundan başlayarak sıralanmış demektir.
+        
+        # İstediğimiz sayfayı (skip'ten sonrasını) alıyoruz
+        page_ids = results["ids"][0][skip:]
+        page_metadatas = results["metadatas"][0][skip:]
+        page_distances = results["distances"][0][skip:]
+
+        for i in range(len(page_ids)):
+            job_id = page_ids[i]
+            metadata = page_metadatas[i]
+            distance = page_distances[i]
 
             similarity_score = max(0, int((1 - distance) * 100))
 
@@ -104,20 +141,23 @@ def calculate_job_match(cv_skills: list) -> list:
             if not original_job:
                 continue
 
-            job_skills_set = set(s.lower() for s in original_job.get("required_skills", []))
-            cv_skills_set = set(s.lower() for s in cv_skills)
+            job_skills = original_job.get("required_skills", [])
+            ats_details = calculate_ats_score(cv_skills, job_skills, (1 - distance))
 
             match_results.append({
                 "id": job_id,
                 "job_title": metadata["title"],
                 "company": metadata["company"],
                 "location": original_job.get("location", "Türkiye"),
-                "match_score_int": similarity_score,
-                "match_percentage": f"%{similarity_score}",
-                "matched_skills": list(cv_skills_set.intersection(job_skills_set)),
-                "missing_skills": list(job_skills_set.difference(cv_skills_set)),
+                "published_at": original_job.get("published_at", ""),
+                "match_score_int": ats_details["ats_score"],
+                "match_percentage": f"%{ats_details['ats_score']}",
+                "matched_skills": ats_details["matched_skills"],
+                "missing_skills": ats_details["missing_skills"],
+                "ats_details": ats_details,
             })
 
-    # Sonuçları eşleşme yüzdesine göre en yüksekten en düşüğe sırala
+
+    # Sonuçları eşleşme yüzdesine göre en yüksekten en düşüğe sırala (Chroma zaten sıralıdır ama garantiye alalım)
     sorted_matches = sorted(match_results, key=lambda x: x["match_score_int"], reverse=True)
-    return sorted_matches
+    return total_matches, sorted_matches

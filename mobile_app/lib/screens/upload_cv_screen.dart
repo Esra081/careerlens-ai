@@ -13,7 +13,6 @@ class UploadCvScreen extends StatefulWidget {
 }
 
 class _UploadCvScreenState extends State<UploadCvScreen> {
-  final ApiService _apiService = ApiService(); // Backend servisi
   bool _isLoading = false; // Yüklenme durumunu tutan değişken
 
   // Dosya seçme ve gönderme fonksiyonu
@@ -30,19 +29,18 @@ class _UploadCvScreenState extends State<UploadCvScreen> {
 
       PlatformFile file = result.files.first;
 
-      // DEĞİŞEN KISIM: Artık isSuccess yerine analiz verisini bekliyoruz
-      var analysisData = await _apiService.uploadCv(file);
+      // HATA BURADAYDI: _apiService nesnesini değil, sınıfın kendisini kullanıyoruz:
+      var analysisData = await ApiService.uploadCv(file);
 
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
 
-        // Veri boş gelmediyse (başarılıysa)
         if (analysisData != null) {
-          final storageService = CvStorageService();
-          await storageService.setCvLoaded(true); // "CV var" yap
-          await storageService.saveAnalysisData(analysisData); // VERİYİ KAYDET!
+          await cvStorageService.addCv(analysisData, file.name);
+
+          if (!mounted) return;
 
           Navigator.pushReplacement(
             context,

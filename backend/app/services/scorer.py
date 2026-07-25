@@ -1,45 +1,35 @@
-def calculate_ats_score(extracted_skills: list, raw_text: str) -> dict:
-    score = 0
-    details = {}
-    text_lower = raw_text.lower()
-
-    # 1. Skill Match (Maks 40 Puan)
-    # Şimdilik CV'de bulunan yetenek sayısına göre orantısal bir puan veriyoruz.
-    # (İleride bunu bir iş ilanıyla eşleştirerek % üzerinden hesaplayacağız)
-    skill_count = len(extracted_skills)
-    skill_score = min(40, skill_count * 4)  # Her yetenek 4 puan, maks 40
-    score += skill_score
-    details["skill_match"] = f"{skill_score}/40"
-
-    # 2. Deneyim (Maks 25 Puan)
-    # Metin içinde deneyim, staj, "experience" gibi kelimeleri arıyoruz
-    experience_keywords = [
-        "deneyim", "tecrübe", "iş geçmişi", "görev", 
-        "staj", "intern", "çalış", "work", "proje yürütücüsü"
-    ]
-    exp_score = 0
-    if any(kw in text_lower for kw in experience_keywords):
-        exp_score = 25
-    score += exp_score
-    details["experience"] = f"{exp_score}/25"
-
-    # 3. Eğitim (Maks 15 Puan)
-    edu_keywords = ["üniversite", "mühendislik", "lisans", "bachelor", "university"]
-    edu_score = 0
-    if any(kw in text_lower for kw in edu_keywords):
-        edu_score = 15
-    score += edu_score
-    details["education"] = f"{edu_score}/15"
-
-    # 4. Anahtar Kelimeler (Maks 20 Puan)
-    # Sektörel buzzword'lerin (ör: proje, geliştirme, optimizasyon) varlığını kontrol ediyoruz
-    buzzwords = ["geliştirme", "proje", "optimizasyon", "model", "algoritma", "ai"]
-    buzz_count = sum(1 for bw in buzzwords if bw in text_lower)
-    buzz_score = min(20, buzz_count * 5)
-    score += buzz_score
-    details["keywords"] = f"{buzz_score}/20"
-
+def calculate_ats_score(cv_skills: list, job_skills: list, cosine_similarity: float) -> dict:
+    """
+    CV yetenekleri ile hedef iş ilanı yeteneklerini karşılaştırarak dinamik ATS skoru hesaplar.
+    Skor Ağırlığı: %60 Kosinüs Benzerliği (Anlamsal Uyum), %40 Beceri Eşleşmesi (Keyword Match)
+    """
+    cv_set = set(s.lower() for s in cv_skills)
+    job_set = set(s.lower() for s in job_skills)
+    
+    # Keyword (Beceri) Eşleşmesi Skoru (%40)
+    if not job_set:
+        keyword_score = 40  # İlanın belirgin bir yeteneği yoksa tam puan verilebilir
+    else:
+        matched_count = len(cv_set.intersection(job_set))
+        keyword_score = int((matched_count / len(job_set)) * 40)
+        
+    # Anlamsal (Semantic) Skor (%60)
+    semantic_score = max(0, int(cosine_similarity * 60))
+    
+    total_score = semantic_score + keyword_score
+    
+    # Orjinal casing'leri korumak için job_skills üzerinden mapping yapıyoruz
+    job_casing = {s.lower(): s for s in job_skills}
+    
+    matched_skills = [job_casing[s] for s in cv_set.intersection(job_set) if s in job_casing]
+    missing_skills = [job_casing[s] for s in job_set.difference(cv_set) if s in job_casing]
+    
     return {
-        "total_score": score,
-        "breakdown": details
+        "ats_score": total_score,
+        "matched_skills": matched_skills,
+        "missing_skills": missing_skills,
+        "details": {
+            "semantic_score": f"{semantic_score}/60",
+            "keyword_score": f"{keyword_score}/40"
+        }
     }

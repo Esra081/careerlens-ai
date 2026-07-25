@@ -1,16 +1,100 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
+import '../services/localization_service.dart';
+import 'coach_markdown_view.dart';
 
-class CareerCoachCard extends StatelessWidget {
+import '../services/api_service.dart';
+import '../services/cv_storage_service.dart';
+import '../services/match_helper.dart';
+
+class CareerCoachCard extends StatefulWidget {
   final Map<String, dynamic> cvData;
 
   const CareerCoachCard({super.key, required this.cvData});
 
   @override
+  State<CareerCoachCard> createState() => _CareerCoachCardState();
+}
+
+class _CareerCoachCardState extends State<CareerCoachCard> {
+  bool _isRefreshing = false;
+
+  Future<void> _refreshAnalysis() async {
+    setState(() {
+      _isRefreshing = true;
+    });
+
+    try {
+      final matched = widget.cvData['matched_skills'] ?? [];
+      final missing = widget.cvData['missing_skills'] ?? [];
+      final atsScore = MatchHelper.resolveAtsScore(widget.cvData, widget.cvData['job_matches'] ?? []);
+      
+      String? newAdvice = await ApiService.getCoachAdvice(
+        "Software Engineer", 
+        List<String>.from(matched), 
+        List<String>.from(missing), 
+        atsScore
+      );
+
+      if (newAdvice != null && mounted) {
+        final updatedData = Map<String, dynamic>.from(widget.cvData);
+        updatedData['ai_analysis'] = newAdvice;
+        await cvStorageService.updateCvData(updatedData, notify: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRefreshing = false;
+        });
+      }
+    }
+  }
+
+  String _generateRealisticAnalysis(Map<String, dynamic> cvData) {
+    int atsScore = MatchHelper.resolveAtsScore(cvData, cvData['job_matches'] ?? []);
+    List<String> skills = [];
+    if (cvData['parsed_skills'] != null) {
+      skills = List<String>.from(cvData['parsed_skills']);
+    }
+    
+    String chanceText = atsScore >= 80 ? 'Yüksek' : (atsScore >= 50 ? 'Riskli' : 'Düşük');
+    
+    String skill1 = skills.isNotEmpty ? skills[0] : 'Yazılım';
+    String skill2 = skills.length > 1 ? skills[1] : 'Teknoloji';
+    String skill3 = skills.length > 2 ? skills[2] : 'Sistem Mimarisi';
+    
+    String stackAnalysis = skills.length > 2 
+      ? "CV'nizde **$skill1** ve **$skill2** gibi güçlü yetkinlikler var. Ancak modern pazar sadece bu araçları bilmenizi değil, mimariyi anlamanızı bekler."
+      : "Mevcut yığın (stack) oldukça zayıf duruyor. Temel teknolojilerde derinleşmeniz gerekiyor.";
+
+    return """### 📊 Gerçekçi Uyum Analizi
+ATS skorunuz **%$atsScore**. Bu skorla ilk elemeyi geçme şansınız **$chanceText**.
+
+### 💡 Teknik Derinlik
+$stackAnalysis
+
+### 🚀 Acil Aksiyon Planı
+Yarın sabah ilk iş olarak **$skill3** üzerine odaklanıp GitHub'a end-to-end bir proje yüklemelisiniz.""";
+  }
+
+  @override
   Widget build(BuildContext context) {
-    Map<String, dynamic> adviceData = cvData['career_advice'] ?? {};
-    String targetRole = adviceData['target_role'] ?? 'Kariyeriniz';
-    String summary = adviceData['summary'] ?? 'Analiz yapılamadı.';
+    Map<String, dynamic> adviceData = widget.cvData['career_advice'] ?? {};
+    String? aiAnalysis = widget.cvData['ai_analysis'];
+    
+    if (aiAnalysis != null && aiAnalysis.trim().startsWith('{')) {
+      try {
+        final decoded = jsonDecode(aiAnalysis);
+        aiAnalysis = decoded['summary'] ?? decoded['ai_analysis'] ?? aiAnalysis;
+      } catch (_) {}
+    }
+
+    String summary = aiAnalysis ?? widget.cvData['summary'] ?? '';
+    if (summary.isEmpty || summary.toLowerCase().contains("kullanılamıyor")) {
+      summary = _generateRealisticAnalysis(widget.cvData);
+    }
+
     List<dynamic> learningPath = adviceData['learning_path'] ?? [];
 
     return Container(
@@ -47,7 +131,7 @@ class CareerCoachCard extends StatelessWidget {
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
-                  "AI Koç: $targetRole",
+                  context.loc('ai_coach_analysis_title'),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
@@ -58,15 +142,32 @@ class CareerCoachCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          Text(
-            summary,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.95),
-              fontSize: 15,
-              height: 1.6,
-              fontWeight: FontWeight.w400,
-            ),
+          // Markdown renderer – handles ###, ** etc cleanly on dark gradient
+          CoachMarkdownView(
+            markdownText: summary,
+            onDarkBackground: true,
           ),
+          
+          if (aiAnalysis == null) ...[
+             const SizedBox(height: 16),
+             Center(
+               child: TextButton.icon(
+                 onPressed: _isRefreshing ? null : _refreshAnalysis,
+                 icon: _isRefreshing 
+                     ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                     : const Icon(Icons.refresh, color: Colors.white),
+                 label: Text(
+                   _isRefreshing ? "Yenileniyor..." : "Analizi Yeniden Getir",
+                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                 ),
+                 style: TextButton.styleFrom(
+                   backgroundColor: Colors.white.withValues(alpha: 0.2),
+                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                 ),
+               ),
+             ),
+          ],
 
           if (learningPath.isNotEmpty) ...[
             const SizedBox(height: 24),
@@ -79,9 +180,9 @@ class CareerCoachCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Tavsiye Edilen Rota",
-                    style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w700, fontSize: 13),
+                  Text(
+                    context.loc('recommended_path'),
+                    style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700, fontSize: 13),
                   ),
                   const SizedBox(height: 12),
                   ...learningPath.map((item) => Padding(

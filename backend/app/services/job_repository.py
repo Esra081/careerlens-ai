@@ -136,8 +136,10 @@ def all_jobs_for_matching() -> list[dict]:
     return [
         {
             "id": job["id"], "title": job["title"], "company": job["company"],
-            "location": job["location"], "required_skills": job["required_skills"],
+            "location": job["location"], "country": job["country"], "required_skills": job["required_skills"],
+            "description": job.get("description", ""),
             "link": job.get("apply_url"),
+            "published_at": job.get("published_at") or job.get("fetched_at", ""),
         }
         for job in jobs
     ]

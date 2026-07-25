@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
 import 'bento_card.dart';
+import '../services/localization_service.dart';
+import '../services/match_helper.dart';
 
 class AtsScoreCard extends StatelessWidget {
   final Map<String, dynamic> cvData;
@@ -9,25 +11,15 @@ class AtsScoreCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Backend'den gelen skoru alıyoruz
-    int score = 0;
-    var rawScore = cvData['ats_score'];
-
-    if (rawScore is int) {
-      score = rawScore; // Eğer zaten sayıysa direkt al
-    } else if (rawScore is Map) {
-      // Eğer backend bir sözlük gönderdiyse, içindeki 'score' anahtarını al
-      score = rawScore['total_score'] ?? 0;
-    } else if (rawScore != null) {
-      // Eğer metin falan gelirse zorla sayıya çevir
-      score = int.tryParse(rawScore.toString()) ?? 0;
-    }
+    // Önce job_matches'tan hesapla (fallback dahil)
+    final jobMatches = MatchHelper.getJobMatches(cvData);
+    final int score = MatchHelper.resolveAtsScore(cvData, jobMatches);
 
     return BentoCard(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text("ATS Uyumluluk", style: AppTheme.titleStyle.copyWith(fontSize: 18)),
+          Text(context.loc('ats_compatibility'), style: AppTheme.titleStyle.copyWith(fontSize: 18, color: Theme.of(context).textTheme.titleLarge?.color)),
           const SizedBox(height: 24),
           Stack(
             alignment: Alignment.center,
@@ -45,18 +37,18 @@ class AtsScoreCard extends StatelessWidget {
               ),
               Text(
                 "%$score",
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.w900, // Çok kalın yazı tipi
-                  color: AppTheme.textColor,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 24),
           Text(
-            score >= 80 ? "Harika! CV'niz çok güçlü." : "CV'nizi biraz daha geliştirmelisiniz.",
-            style: AppTheme.captionStyle,
+            score >= 80 ? context.loc('ats_great') : context.loc('ats_improve'),
+            style: AppTheme.captionStyle.copyWith(color: Theme.of(context).textTheme.bodyMedium?.color),
             textAlign: TextAlign.center,
           ),
         ],

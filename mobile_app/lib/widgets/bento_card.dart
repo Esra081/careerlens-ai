@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../core/theme/app_theme.dart';
 
 class BentoCard extends StatelessWidget {
   final Widget child;
@@ -19,12 +18,14 @@ class BentoCard extends StatelessWidget {
       padding: padding,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: backgroundColor ?? AppTheme.surfaceColor,
+        color: backgroundColor ?? Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.03), width: 1),
+        border: Border.all(color: Theme.of(context).dividerColor, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Theme.of(context).brightness == Brightness.light
+                ? Colors.black.withValues(alpha: 0.02)
+                : Colors.transparent,
             blurRadius: 30,
             offset: const Offset(0, 10),
           )

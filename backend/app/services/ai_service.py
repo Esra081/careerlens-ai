@@ -25,6 +25,52 @@ def _require_model():
     return _model
 
 
+import json
+
+def extract_skills_via_ai(text: str) -> list:
+    """Gemini modelini kullanarak metinden yetenekleri (teknik beceriler) yapılandırılmış JSON olarak çıkarır."""
+    model = _require_model()
+    prompt = f"""
+Sen uzman bir teknik İK analistisin.
+Aşağıdaki CV metninde yer alan tüm teknik becerileri (yazılım dilleri, frameworkler, araçlar, veritabanları, teknolojiler) çıkar.
+YALNIZCA geçerli bir JSON listesi döndür, başka hiçbir metin, açıklama veya markdown (```json ... ```) etiketleri İÇERMEMELİDİR.
+Eğer hiç beceri bulamazsan boş bir liste [] döndür.
+Örnek Çıktı: ["Python", "React", "Docker"]
+
+Metin:
+{text}
+"""
+    import time
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            response = model.generate_content(prompt)
+            content = response.text.strip()
+            
+            # Olası markdown kalıntılarını temizle
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+            
+            skills = json.loads(content)
+            if isinstance(skills, list):
+                return skills
+            return []
+        except Exception as e:
+            error_msg = str(e)
+            if "429" in error_msg or "ResourceExhausted" in error_msg or "Quota" in error_msg:
+                if attempt < max_retries - 1:
+                    print(f"⚠️ GEMINI 429 KOTASI AŞILDI (Deneme {attempt+1}). 15 saniye bekleniyor...")
+                    time.sleep(15)
+                    continue
+            print(f"🚨 GEMINI JSON HATASI (Beceri Çıkarımı): {error_msg}")
+            raise e # Hata fırlat ki fallback devreye girsin
+
+
 def rewrite_cv_bullet(old_text: str) -> str:
     """Basit cümleleri etkileyici ATS cümlelerine çevirir."""
     model = _require_model()
@@ -43,29 +89,41 @@ def rewrite_cv_bullet(old_text: str) -> str:
         return f"Yapay zeka hatası: {str(e)}"
 
 
-def generate_ai_career_coach(target_role: str, missing_skills: list) -> str:
-    """Gemini API'sine bağlanıp dinamik mentorluk metni üretir."""
-    if not missing_skills:
-        return (
-            f"Harika! {target_role} rolü için eksik bir yeteneğiniz görünmüyor. "
-            "Mevcut yeteneklerinizle hemen başvurulara başlayabilirsiniz."
-        )
-
+def generate_ai_career_coach(target_role: str, matched_skills: list, missing_skills: list, ats_score: int = 0) -> str:
+    """Gemini API'sine bağlanıp acımasız ve gerçekçi dinamik mentorluk metni üretir."""
     model = _require_model()
-    skills_str = ", ".join(missing_skills)
-    prompt = f"""
-    Sen kıdemli bir Tech Recruiter ve Kariyer Koçusun. 
-    Kullanıcının hedeflediği rol: {target_role}.
-    Eksik olduğu teknolojiler: {skills_str}.
     
-    Bu teknolojileri NEDEN öğrenmesi gerektiğini anlatan, kısa (maksimum 3 cümle), motive edici ve teknik olarak mantıklı bir özet yaz.
-    """
+    matched_str = ", ".join(matched_skills) if matched_skills else "Belirtilmemiş"
+    missing_str = ", ".join(missing_skills) if missing_skills else "Belirtilmemiş"
+
+    prompt = f"""
+Sen acımasız, aşırı gerçekçi ve son derece titiz bir Senior Tech Recruiter ve Engineering Manager'sın.
+ASLA "Harika bir CV", "Çok iyisin", "Mükemmel" gibi sahte övgüler yapma. Adayın eksiklerini net, sert ve yapıcı bir dille yüzüne vur.
+Karşındaki kişi "{target_role}" ilanı için BAŞVURAN bir aday.
+Adayın Anlamsal Uyum (ATS) Skoru: {ats_score}/100.
+Adayın Sahip Olduğu Yetenekler: {matched_str}
+Adayın Eksik Olduğu (İlanda İstenen) Yetenekler: {missing_str}
+
+Yanıtın KESİNLİKLE aşağıdaki 3 başlığı (tam olarak bu isimlerle) içermelidir ve profesyonel/sert bir Türkçe ile yazılmalıdır:
+
+1. Gerçekçi Uyum Analizi
+CV ile ilan arasındaki uçurum nerede? Aday neden doğrudan reddedilebilir? (Lafı dolandırmadan net bir şekilde söyle). Eğer skor çok yüksekse bile rehavete kapılmaması gerektiğini söyle.
+
+2. Kapatılması Gereken Açık
+Eksik olan beceriler işin aslında ne işe yarıyor? Aday bu yetenekleri öğrenmek veya kanıtlamak için yarın sabah HANGİ SPESİFİK PROJEYE başlamalı? (Genel tavsiye verme, doğrudan teknik mimari veya proje adı ver. Eksik beceri yoksa bile adayı sınırlarını zorlayacak bir teknolojiye yönlendir).
+
+3. CV İyileştirme (CV Rewriter)
+Adayın sahip olduğu yeteneklerden birini seç. Sıradan bir cümleyi STAR (Situation, Task, Action, Result) tekniğiyle yazılmış, sayısal metrikler içeren profesyonel bir CV maddesine dönüştür.
+Örnek format:
+- Eski Hal: [Seçtiğin yetenekle ilgili sıradan bir cümle]
+- Olması Gereken Hal: [STAR formatında, metrik içeren profesyonel cümle]
+"""
     try:
         response = model.generate_content(prompt)
         return response.text.strip()
     except Exception as e:
-        print(f"🚨 GEMINI HATASI: {str(e)}")
-        return "Yapay zeka analiz yaparken bir sorunla karşılaştı, ancak temel yeteneklerini geliştirmeye odaklanmalısın."
+        print(f"🚨 GEMINI HATASI (AI Koç): {str(e)}")
+        return "Yapay zeka analizi şu an kullanılamıyor. Lütfen eksik becerilerinizi tamamlamaya odaklanın."
 
 
 def generate_career_advice(job_matches: list) -> dict:
@@ -76,10 +134,12 @@ def generate_career_advice(job_matches: list) -> dict:
     # En yüksek eşleşmeye sahip ilk ilanı hedef alıyoruz
     top_match = job_matches[0]
     target_role = top_match["job_title"]
+    matched_skills = top_match.get("matched_skills", [])
     missing_skills = top_match["missing_skills"]
+    ats_score = top_match.get("match_score_int", 0)
 
     # Gemini'den dinamik koçluk metnini (summary) al
-    ai_summary = generate_ai_career_coach(target_role, missing_skills)
+    ai_summary = generate_ai_career_coach(target_role, matched_skills, missing_skills, ats_score)
 
     # Flutter arayüzünün alt alta madde madde (bullet point) basabilmesi için
     # eksik yetenekleri JSON listesi formatında tutuyoruz.

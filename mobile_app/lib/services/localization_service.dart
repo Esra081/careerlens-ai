@@ -1,0 +1,377 @@
+import 'package:flutter/material.dart';
+import 'settings_service.dart';
+
+class LocalizationService {
+  static final Map<String, Map<String, String>> _dictionary = {
+    'tr': {
+      // Home Screen
+      'good_morning': 'Günaydın,',
+      'good_afternoon': 'İyi günler,',
+      'good_evening': 'İyi akşamlar,',
+      'good_night': 'İyi geceler,',
+      'no_cv_yet': 'Henüz Bir CV Yüklemediniz',
+      'no_cv_desc': 'Yapay zeka analizini görmek için ilk CV\'nizi yükleyin.',
+      'upload_cv': 'CV Yükle',
+      'selected_for_you': 'Sizin İçin Seçilenler',
+      'more_filters': 'Daha Fazla Filtre',
+      'no_jobs_found': 'Şu an için uygun ilan bulunamadı.',
+      'analyzed_cv': 'Analiz Edilen CV',
+      'match': 'Eşleşme',
+      'quick_apply': 'Hızlı Başvur',
+      'save': 'Kaydet',
+      'saved': 'Kaydedildi',
+      'full_time': 'Tam Zamanlı',
+
+      // Main Layout
+      'summary': 'Özet',
+      'jobs': 'İlanlar',
+
+      // Jobs Screen
+      'search_position': 'Pozisyon Ara...',
+      'all': 'Tümü',
+      'america': 'Amerika',
+      'uk': 'İngiltere',
+      'germany': 'Almanya',
+      'all_jobs': 'Tüm İlanlar',
+      'saved_jobs': 'Kaydedilenler',
+      'company': 'Şirket',
+      'position': 'Pozisyon',
+      'job_saved_msg': 'İlan kaydedildi.',
+      'job_unsaved_msg': 'İlan kayıtlardan çıkarıldı.',
+
+      // CV List Screen
+      'my_cvs': 'CV\'lerim',
+      'add_new_cv': 'Yeni CV Ekle',
+      'upload_new_cv': 'Yeni CV Yükle',
+      'active': 'Aktif',
+      'available': 'Mevcut',
+      'make_default': 'Varsayılan Yap',
+      'default_cv': 'Varsayılan CV',
+      'delete_cv_title': 'CV Silinecek',
+      'delete_cv_desc': 'Bu CV\'yi silmek istediğinizden emin misiniz?',
+      'cancel': 'İptal',
+      'delete': 'Sil',
+      'no_cv_loaded': 'Henüz bir CV yüklemediniz.',
+      'upload_success': 'Yeni CV başarıyla yüklendi ve analiz edildi!',
+      'upload_error': 'CV yüklenirken bir hata oluştu:',
+
+      // Job Detail Screen
+      'job_summary': 'İlan Özeti',
+      'read_more': 'Devamını Oku',
+      'show_less': 'Daha Az Göster',
+      'ats_score_title': 'ATS Uyum Skoru',
+      'semantic_match': 'Anlamsal Uyum',
+      'keyword_match': 'Beceri Uyum',
+      'skills_analysis': 'Yetkinlik Analizi',
+      'matched_skills': 'Eşleşen Yetenekler',
+      'missing_skills': 'Geliştirilmesi Gerekenler',
+      'ai_coach': 'AI Kariyer Koçu',
+      'coach_desc': 'Sana özel analiz & öneriler',
+      'coach_loading': 'Koç analiz yapıyor...',
+      'coach_error': 'Tavsiye alınırken bir hata oluştu.',
+      'apply_now': 'Hemen Başvur',
+      'redirecting': 'şirketine başvuru sayfasına yönlendiriliyor...',
+      'perfect_match':
+          'Bu ilan için tüm kritik becerilere sahipsiniz. Hemen başvurabilirsiniz!',
+
+      // AI Coach & Analysis
+      'skill_radar': 'Yetenek Radarı',
+      'radar_desc': 'CV\'nizdeki güçlü alanlar',
+      'ai_coach_title': 'AI Kariyer Koçu',
+      'deep_analysis': 'Derinlemesine Analiz',
+      'deep_analysis_desc':
+          'Yetenekleriniz, eksikleriniz ve yapay zekanın hedeflerinize ulaşmanız için çizdiği özel rota.',
+      'detected_skills': 'Tespit Edilen Yetkinlikler',
+      'no_skills_found': 'CV\'nizde teknoloji bulunamadı.',
+      'ats_compatibility': 'ATS Uyumluluk',
+      'ats_great': 'Harika! CV\'niz çok güçlü.',
+      'ats_improve': 'CV\'nizi biraz daha geliştirmelisiniz.',
+      'recommended_path': 'Tavsiye Edilen Rota',
+      'not_enough_skills_for_chart':
+          'Grafik analizi için CV\'nizde en az 3 yetenek bulunmalıdır.',
+      'no_analysis': 'Analiz Bulunamadı',
+      'no_analysis_desc':
+          'Yapay zeka analizini ve gelişim rotanızı görebilmek için lütfen ana sayfadan bir CV yükleyin.',
+      'ai_coach_mock_desc': 'Mevcut yetenekleriniz ve hedefleriniz doğrultusunda eksik bir yeteneğiniz görünmüyor. Hemen başvurulara başlayabilirsiniz.',
+      'ai_coach_analysis_title': 'Yapay Zeka Kariyer Analizi',
+
+      // Settings Screen
+      'settings': 'Ayarlar',
+      'theme_appearance': 'Tema ve Görünüm',
+      'light_theme': 'Açık Tema',
+      'dark_theme': 'Koyu Tema',
+      'system_theme': 'Sistem Teması',
+      'language_options': 'Dil Seçenekleri',
+      'turkish': 'Türkçe',
+      'english': 'English',
+      'german': 'Deutsch',
+      'lang_tr': 'Türkçe',
+      'lang_en': 'İngilizce',
+      'lang_de': 'Almanca',
+
+      // Outreach & Planner
+      'outreach_btn': 'İşe Alım Uzmanına Mesaj Hazırla',
+      'outreach_card_title': 'Bağlantı Şablonu',
+      'copy': 'Kopyala',
+      'copied_msg': 'Kopyalandı!',
+      'suitable_roles': 'Uygun Unvanlar ve Projeler',
+      'dev_radar': 'Gelişim Radarı',
+      'interactive_planner': 'İnteraktif Planlayıcı',
+      'planner_duration': 'Plan Süresi:',
+      'month': 'Ay',
+      'planner_hide': 'Rotamı Gizle',
+      'planner_draw': 'Rotamı Çiz',
+
+      // General
+      'error': 'Hata',
+      'loading': 'Yükleniyor...',
+    },
+    'en': {
+      'good_morning': 'Good morning,',
+      'good_afternoon': 'Good afternoon,',
+      'good_evening': 'Good evening,',
+      'good_night': 'Good night,',
+      'no_cv_yet': 'No CV Uploaded Yet',
+      'no_cv_desc': 'Upload your first CV to see AI analysis.',
+      'upload_cv': 'Upload CV',
+      'selected_for_you': 'Picked for You',
+      'more_filters': 'More Filters',
+      'no_jobs_found': 'No suitable jobs found at the moment.',
+      'analyzed_cv': 'Analyzed CV',
+      'match': 'Match',
+      'quick_apply': 'Quick Apply',
+      'save': 'Save',
+      'saved': 'Saved',
+      'full_time': 'Full Time',
+
+      // Main Layout
+      'summary': 'Summary',
+      'jobs': 'Jobs',
+
+      'search_position': 'Search positions...',
+      'all': 'All',
+      'america': 'America',
+      'uk': 'UK',
+      'germany': 'Germany',
+      'all_jobs': 'All Jobs',
+      'saved_jobs': 'Saved Jobs',
+      'company': 'Company',
+      'position': 'Position',
+      'job_saved_msg': 'Job saved.',
+      'job_unsaved_msg': 'Job removed from saved.',
+
+      'my_cvs': 'My CVs',
+      'add_new_cv': 'Add New CV',
+      'upload_new_cv': 'Upload New CV',
+      'active': 'Active',
+      'available': 'Available',
+      'make_default': 'Make Default',
+      'default_cv': 'Default CV',
+      'delete_cv_title': 'Delete CV',
+      'delete_cv_desc': 'Are you sure you want to delete this CV?',
+      'cancel': 'Cancel',
+      'delete': 'Delete',
+      'no_cv_loaded': 'You haven\'t uploaded a CV yet.',
+      'upload_success': 'New CV successfully uploaded and analyzed!',
+      'upload_error': 'Error uploading CV:',
+
+      'job_summary': 'Job Summary',
+      'read_more': 'Read More',
+      'show_less': 'Show Less',
+      'ats_score_title': 'ATS Match Score',
+      'semantic_match': 'Semantic Match',
+      'keyword_match': 'Keyword Match',
+      'skills_analysis': 'Skills Analysis',
+      'matched_skills': 'Matched Skills',
+      'missing_skills': 'Skills to Improve',
+      'ai_coach': 'AI Career Coach',
+      'coach_desc': 'Personalized analysis & suggestions',
+      'coach_loading': 'Coach is analyzing...',
+      'coach_error': 'Error retrieving advice.',
+      'apply_now': 'Apply Now',
+      'redirecting': 'redirecting to application page...',
+      'perfect_match':
+          'You have all critical skills for this job. You can apply now!',
+
+      // AI Coach & Analysis
+      'skill_radar': 'Skill Radar',
+      'radar_desc': 'Strong areas in your CV',
+      'ai_coach_title': 'AI Career Coach',
+      'deep_analysis': 'In-Depth Analysis',
+      'deep_analysis_desc':
+          'Your skills, gaps, and the custom path AI charted for you to reach your goals.',
+      'detected_skills': 'Detected Skills',
+      'no_skills_found': 'No tech stack found in your CV.',
+      'ats_compatibility': 'ATS Compatibility',
+      'ats_great': 'Great! Your CV is very strong.',
+      'ats_improve': 'You should improve your CV a bit more.',
+      'recommended_path': 'Recommended Path',
+      'not_enough_skills_for_chart':
+          'You need at least 3 skills in your CV for chart analysis.',
+      'no_analysis': 'No Analysis Found',
+      'no_analysis_desc':
+          'Please upload a CV from the home page to see the AI analysis and development path.',
+      'ai_coach_mock_desc': 'Based on your current skills and goals, you don\'t seem to be missing any skills. You can start applying right away.',
+      'ai_coach_analysis_title': 'AI Career Analysis',
+
+      'settings': 'Settings',
+      'theme_appearance': 'Theme & Appearance',
+      'light_theme': 'Light Theme',
+      'dark_theme': 'Dark Theme',
+      'system_theme': 'System Theme',
+      'language_options': 'Language Options',
+      'turkish': 'Türkçe',
+      'english': 'English',
+      'german': 'Deutsch',
+      'lang_tr': 'Turkish',
+      'lang_en': 'English',
+      'lang_de': 'German',
+
+      // Outreach & Planner
+      'outreach_btn': 'Prepare Message for Recruiter',
+      'outreach_card_title': 'Outreach Template',
+      'copy': 'Copy',
+      'copied_msg': 'Copied!',
+      'suitable_roles': 'Suitable Roles & Projects',
+      'dev_radar': 'Development Radar',
+      'interactive_planner': 'Interactive Planner',
+      'planner_duration': 'Plan Duration:',
+      'month': 'Month',
+      'planner_hide': 'Hide My Path',
+      'planner_draw': 'Draw My Path',
+
+      'error': 'Error',
+      'loading': 'Loading...',
+    },
+    'de': {
+      'good_morning': 'Guten Morgen,',
+      'good_afternoon': 'Guten Tag,',
+      'good_evening': 'Guten Abend,',
+      'good_night': 'Gute Nacht,',
+      'no_cv_yet': 'Noch kein Lebenslauf hochgeladen',
+      'no_cv_desc':
+          'Laden Sie Ihren ersten Lebenslauf hoch, um die KI-Analyse zu sehen.',
+      'upload_cv': 'Lebenslauf hochladen',
+      'selected_for_you': 'Für Sie ausgewählt',
+      'more_filters': 'Weitere Filter',
+      'no_jobs_found': 'Derzeit keine passenden Stellen gefunden.',
+      'analyzed_cv': 'Analysierter Lebenslauf',
+      'match': 'Übereinstimmung',
+      'quick_apply': 'Schnellbewerbung',
+      'save': 'Speichern',
+      'saved': 'Gespeichert',
+      'full_time': 'Vollzeit',
+
+      // Main Layout
+      'summary': 'Zusammenfassung',
+      'jobs': 'Stellen',
+
+      'search_position': 'Positionen suchen...',
+      'all': 'Alle',
+      'america': 'Amerika',
+      'uk': 'Großbritannien',
+      'germany': 'Deutschland',
+      'all_jobs': 'Alle Stellen',
+      'saved_jobs': 'Gespeicherte',
+      'company': 'Unternehmen',
+      'position': 'Position',
+      'job_saved_msg': 'Stelle gespeichert.',
+      'job_unsaved_msg': 'Stelle aus gespeicherten entfernt.',
+
+      'my_cvs': 'Meine Lebensläufe',
+      'add_new_cv': 'Neuen Lebenslauf',
+      'upload_new_cv': 'Neuen Lebenslauf hochladen',
+      'active': 'Aktiv',
+      'available': 'Verfügbar',
+      'make_default': 'Als Standard',
+      'default_cv': 'Standard-Lebenslauf',
+      'delete_cv_title': 'Lebenslauf löschen',
+      'delete_cv_desc': 'Möchten Sie diesen Lebenslauf wirklich löschen?',
+      'cancel': 'Abbrechen',
+      'delete': 'Löschen',
+      'no_cv_loaded': 'Sie haben noch keinen Lebenslauf hochgeladen.',
+      'upload_success':
+          'Neuer Lebenslauf erfolgreich hochgeladen und analysiert!',
+      'upload_error': 'Fehler beim Hochladen des Lebenslaufs:',
+
+      'job_summary': 'Stellenzusammenfassung',
+      'read_more': 'Weiterlesen',
+      'show_less': 'Weniger anzeigen',
+      'ats_score_title': 'ATS-Übereinstimmung',
+      'semantic_match': 'Semantische',
+      'keyword_match': 'Fähigkeiten',
+      'skills_analysis': 'Fähigkeitsanalyse',
+      'matched_skills': 'Übereinstimmende',
+      'missing_skills': 'Zu verbessernde',
+      'ai_coach': 'KI-Karrierecoach',
+      'coach_desc': 'Personalisierte Analyse & Tipps',
+      'coach_loading': 'Coach analysiert...',
+      'coach_error': 'Fehler beim Abrufen.',
+      'apply_now': 'Jetzt bewerben',
+      'redirecting': 'weiterleitung zur Bewerbungsseite...',
+      'perfect_match':
+          'Sie haben alle wichtigen Fähigkeiten für diese Stelle. Jetzt bewerben!',
+
+      // AI Coach & Analysis
+      'skill_radar': 'Fähigkeitsradar',
+      'radar_desc': 'Starke Bereiche in Ihrem Lebenslauf',
+      'ai_coach_title': 'KI-Karrierecoach',
+      'deep_analysis': 'Tiefgehende Analyse',
+      'deep_analysis_desc':
+          'Ihre Fähigkeiten, Lücken und der maßgeschneiderte KI-Pfad zur Erreichung Ihrer Ziele.',
+      'detected_skills': 'Erkannte Fähigkeiten',
+      'no_skills_found': 'Keine Technologien in Ihrem Lebenslauf gefunden.',
+      'ats_compatibility': 'ATS-Kompatibilität',
+      'ats_great': 'Großartig! Ihr Lebenslauf ist sehr stark.',
+      'ats_improve': 'Sie sollten Ihren Lebenslauf noch etwas verbessern.',
+      'recommended_path': 'Empfohlener Pfad',
+      'not_enough_skills_for_chart':
+          'Sie benötigen mindestens 3 Fähigkeiten in Ihrem Lebenslauf für die Diagrammanalyse.',
+      'no_analysis': 'Keine Analyse gefunden',
+      'no_analysis_desc':
+          'Bitte laden Sie einen Lebenslauf von der Startseite hoch, um die KI-Analyse und den Entwicklungspfad zu sehen.',
+      'ai_coach_mock_desc': 'Basierend auf Ihren aktuellen Fähigkeiten und Zielen scheinen Ihnen keine Fähigkeiten zu fehlen. Sie können sich sofort bewerben.',
+      'ai_coach_analysis_title': 'KI-Karriereanalyse',
+
+      'settings': 'Einstellungen',
+      'theme_appearance': 'Thema & Erscheinungsbild',
+      'light_theme': 'Helles Thema',
+      'dark_theme': 'Dunkles Thema',
+      'system_theme': 'Systemthema',
+      'language_options': 'Sprachoptionen',
+      'turkish': 'Türkçe',
+      'english': 'English',
+      'german': 'Deutsch',
+      'lang_tr': 'Türkisch',
+      'lang_en': 'Englisch',
+      'lang_de': 'Deutsch',
+
+      // Outreach & Planner
+      'outreach_btn': 'Nachricht an Recruiter vorbereiten',
+      'outreach_card_title': 'Kontaktvorlage',
+      'copy': 'Kopieren',
+      'copied_msg': 'Kopiert!',
+      'suitable_roles': 'Geeignete Rollen & Projekte',
+      'dev_radar': 'Entwicklungsradar',
+      'interactive_planner': 'Interaktiver Planer',
+      'planner_duration': 'Plandauer:',
+      'month': 'Monat',
+      'planner_hide': 'Meinen Pfad verbergen',
+      'planner_draw': 'Meinen Pfad zeichnen',
+
+      'error': 'Fehler',
+      'loading': 'Wird geladen...',
+    },
+  };
+
+  static String loc(String key, String langCode) {
+    final langDict = _dictionary[langCode] ?? _dictionary['en'];
+    return langDict?[key] ?? _dictionary['en']?[key] ?? key;
+  }
+}
+
+extension LocalizationExtension on BuildContext {
+  String loc(String key) {
+    return LocalizationService.loc(key, settingsService.languageCode);
+  }
+}

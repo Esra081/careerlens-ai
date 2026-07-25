@@ -23,8 +23,7 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(milliseconds: 1500));
 
     // Hafızayı kontrol et: CV yüklü mü?
-    final storage = CvStorageService();
-    bool hasCv = await storage.checkHasCv();
+    bool hasCv = await cvStorageService.checkHasCv();
 
     if (mounted) {
       if (hasCv) {

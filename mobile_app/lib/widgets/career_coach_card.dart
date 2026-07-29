@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../core/theme/app_theme.dart';
 import '../services/localization_service.dart';
-import 'coach_markdown_view.dart';
 
 import '../services/api_service.dart';
 import '../services/cv_storage_service.dart';
@@ -81,18 +81,28 @@ Yarın sabah ilk iş olarak **$skill3** üzerine odaklanıp GitHub'a end-to-end 
   @override
   Widget build(BuildContext context) {
     Map<String, dynamic> adviceData = widget.cvData['career_advice'] ?? {};
-    String? aiAnalysis = widget.cvData['ai_analysis'];
-    
-    if (aiAnalysis != null && aiAnalysis.trim().startsWith('{')) {
-      try {
-        final decoded = jsonDecode(aiAnalysis);
-        aiAnalysis = decoded['summary'] ?? decoded['ai_analysis'] ?? aiAnalysis;
-      } catch (_) {}
+    String displayText = "";
+    dynamic rawAnalysis = widget.cvData['ai_analysis'] ?? widget.cvData['summary'];
+
+    if (rawAnalysis != null) {
+      String rawString = rawAnalysis.toString().trim();
+      if (rawString.startsWith('{')) {
+        try {
+          final Map<String, dynamic> decoded = jsonDecode(rawString);
+          displayText = (decoded['summary'] ?? decoded['ai_analysis'] ?? rawString).toString();
+        } catch (_) {
+          displayText = rawString;
+        }
+      } else {
+        displayText = rawString;
+      }
     }
 
-    String summary = aiAnalysis ?? widget.cvData['summary'] ?? '';
-    if (summary.isEmpty || summary.toLowerCase().contains("kullanılamıyor")) {
-      summary = _generateRealisticAnalysis(widget.cvData);
+    if (displayText.isEmpty || 
+        displayText.toLowerCase().contains("kullanılamıyor") || 
+        displayText.toLowerCase().contains("hata") || 
+        displayText.toLowerCase().contains("error")) {
+      displayText = _generateRealisticAnalysis(widget.cvData);
     }
 
     List<dynamic> learningPath = adviceData['learning_path'] ?? [];
@@ -142,13 +152,24 @@ Yarın sabah ilk iş olarak **$skill3** üzerine odaklanıp GitHub'a end-to-end 
             ],
           ),
           const SizedBox(height: 24),
-          // Markdown renderer – handles ###, ** etc cleanly on dark gradient
-          CoachMarkdownView(
-            markdownText: summary,
-            onDarkBackground: true,
+          // Garantili metin basımı ve taşma koruması
+          Container(
+            constraints: const BoxConstraints(maxHeight: 400),
+            child: SingleChildScrollView(
+              child: MarkdownBody(
+                data: displayText,
+                styleSheet: MarkdownStyleSheet(
+                  p: const TextStyle(color: Colors.white, fontSize: 14, height: 1.6),
+                  h1: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  h2: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  h3: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                  strong: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  listBullet: const TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
           ),
-          
-          if (aiAnalysis == null) ...[
+          if (rawAnalysis == null) ...[
              const SizedBox(height: 16),
              Center(
                child: TextButton.icon(

@@ -161,37 +161,87 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
     }
     if (topSkills.isEmpty) topSkills = ['Teknoloji', 'Yazılım', 'Proje', 'Geliştirme'];
 
-    final Map<String, List<String>> titlePool = {
-      'Python': ['Backend Developer', 'AI/ML Engineer', 'Data Scientist'],
-      'YOLOv8': ['Computer Vision Engineer', 'AI Researcher'],
-      'OpenCV': ['Computer Vision Engineer', 'Image Processing Engineer'],
-      'MATLAB': ['Systems Engineer', 'Simulation Engineer', 'Research Scientist'],
-      'React': ['Frontend Developer', 'UI Engineer', 'Full Stack Developer'],
-      'Flutter': ['Mobile App Developer', 'Flutter Engineer'],
-      'Java': ['Backend Developer', 'Software Engineer', 'Enterprise Developer'],
-      'C++': ['Game Developer', 'Embedded Systems Engineer', 'C++ Developer'],
-      'SQL': ['Data Analyst', 'Database Administrator', 'Data Engineer'],
-      'Docker': ['DevOps Engineer', 'Cloud Engineer'],
-      'AWS': ['Cloud Architect', 'DevOps Engineer'],
-      'Kubernetes': ['DevOps Engineer', 'Platform Engineer'],
-      'Machine Learning': ['Machine Learning Engineer', 'AI/ML Developer'],
-      'Deep Learning': ['AI Researcher', 'Deep Learning Engineer'],
+    // Sektör Sözlüğü (Genişletilmiş Unvan Havuzu)
+    final Map<String, List<String>> industryDictionary = {
+      // Görüntü İşleme / Yapay Zeka
+      'yolov8': ['Computer Vision Engineer', 'AI/ML Researcher', 'Data Scientist'],
+      'opencv': ['Computer Vision Engineer', 'AI/ML Researcher', 'Data Scientist'],
+      'pytorch': ['Computer Vision Engineer', 'AI/ML Researcher', 'Data Scientist'],
+      'tensorflow': ['Computer Vision Engineer', 'AI/ML Researcher', 'Data Scientist'],
+      'scikit-learn': ['Computer Vision Engineer', 'AI/ML Researcher', 'Data Scientist'],
+      'llm': ['Computer Vision Engineer', 'AI/ML Researcher', 'Data Scientist'],
+      'rag': ['Computer Vision Engineer', 'AI/ML Researcher', 'Data Scientist'],
+      'machine learning': ['Computer Vision Engineer', 'AI/ML Researcher', 'Data Scientist'],
+      'deep learning': ['Computer Vision Engineer', 'AI/ML Researcher', 'Data Scientist'],
+      'computer vision': ['Computer Vision Engineer', 'AI/ML Researcher', 'Data Scientist'],
+      
+      // Backend & Sistem
+      'python': ['Backend Software Engineer', 'Systems Engineer', 'Cloud/DevOps Engineer'],
+      'fastapi': ['Backend Software Engineer', 'Systems Engineer', 'Cloud/DevOps Engineer'],
+      'c#': ['Backend Software Engineer', 'Systems Engineer', 'Cloud/DevOps Engineer'],
+      '.net': ['Backend Software Engineer', 'Systems Engineer', 'Cloud/DevOps Engineer'],
+      'asp.net core': ['Backend Software Engineer', 'Systems Engineer', 'Cloud/DevOps Engineer'],
+      'sql': ['Backend Software Engineer', 'Systems Engineer', 'Cloud/DevOps Engineer'],
+      'mssql': ['Backend Software Engineer', 'Systems Engineer', 'Cloud/DevOps Engineer'],
+      'docker': ['Backend Software Engineer', 'Systems Engineer', 'Cloud/DevOps Engineer'],
+      'kubernetes': ['Backend Software Engineer', 'Systems Engineer', 'Cloud/DevOps Engineer'],
+
+      // Mobil & Frontend
+      'flutter': ['Mobile App Developer (Flutter)', 'Frontend Developer', 'Full Stack Engineer'],
+      'dart': ['Mobile App Developer (Flutter)', 'Frontend Developer', 'Full Stack Engineer'],
+      'react': ['Mobile App Developer (Flutter)', 'Frontend Developer', 'Full Stack Engineer'],
+      'next.js': ['Mobile App Developer (Flutter)', 'Frontend Developer', 'Full Stack Engineer'],
+      'javascript': ['Mobile App Developer (Flutter)', 'Frontend Developer', 'Full Stack Engineer'],
+      'html': ['Mobile App Developer (Flutter)', 'Frontend Developer', 'Full Stack Engineer'],
+      'css': ['Mobile App Developer (Flutter)', 'Frontend Developer', 'Full Stack Engineer'],
+
+      // Gömülü & Simülasyon
+      'c++': ['Embedded Systems Engineer', 'Simulation & Modeling Engineer'],
+      'matlab': ['Embedded Systems Engineer', 'Simulation & Modeling Engineer'],
+      'simulink': ['Embedded Systems Engineer', 'Simulation & Modeling Engineer'],
     };
 
-    final dynamicRoles = topSkills.map((skill) {
-      // Anahtar kelime eşleşmesi (Büyük/küçük harf duyarsız)
-      String matchKey = titlePool.keys.firstWhere(
-        (key) => skill.toLowerCase().contains(key.toLowerCase()),
-        orElse: () => '',
-      );
+    Set<String> uniqueRoles = {};
+    List<String> allParsedSkills = [];
+    if (enrichedCvData['parsed_skills'] != null) {
+      allParsedSkills = List<String>.from(enrichedCvData['parsed_skills']);
+    }
 
-      String roleTitle = matchKey.isNotEmpty 
-          ? titlePool[matchKey]!.first 
-          : 'Software Engineer';
-          
+    // 1) Tüm yetenekleri gez ve unvanları topla (Set ile benzersiz yap)
+    for (String skill in allParsedSkills) {
+      String skillLower = skill.toLowerCase();
+      for (String key in industryDictionary.keys) {
+        if (skillLower.contains(key)) {
+          uniqueRoles.addAll(industryDictionary[key]!);
+        }
+      }
+    }
+
+    // 2) Zeki Fallback: Hiçbir şey bulunamadıysa standart unvanları ekle
+    if (uniqueRoles.isEmpty) {
+      uniqueRoles.add('Software Engineer');
+      uniqueRoles.add('Junior Developer');
+    }
+
+    // Ekranda en fazla 4 unvan göster (çok fazla uzamaması için)
+    List<String> finalRolesList = uniqueRoles.toList().take(4).toList();
+
+    final dynamicRoles = finalRolesList.map((roleTitle) {
+      // Bu unvanın hangi yetenekten geldiğini bul (proje fikri için)
+      String relatedSkill = topSkills.isNotEmpty ? topSkills.first : 'Yazılım';
+      for (String skill in allParsedSkills) {
+        String skillLower = skill.toLowerCase();
+        for (String key in industryDictionary.keys) {
+          if (skillLower.contains(key) && industryDictionary[key]!.contains(roleTitle)) {
+            relatedSkill = skill;
+            break;
+          }
+        }
+      }
+
       return _SuggestedRole(
         title: roleTitle,
-        projectIdea: '$skill tabanlı yenilikçi end-to-end uygulama',
+        projectIdea: '$relatedSkill odaklı yenilikçi end-to-end çözüm',
         icon: Icons.work_outline,
         color: const Color(0xFF6B48FF),
       );

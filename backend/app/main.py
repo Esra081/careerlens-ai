@@ -4,6 +4,8 @@ from fastapi.responses import JSONResponse
 import uvicorn
 import json
 import os
+import asyncio
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.services.parser import extract_text_from_pdf
 from app.services.extractor import extract_skills
@@ -28,6 +30,33 @@ app.add_middleware(
 app.include_router(cv_router)
 
 PROFILE_FILE = "user_profile.json"
+
+# ---------------------------------------------------------------------------
+# Arka Plan Görevleri (Scheduler)
+# ---------------------------------------------------------------------------
+
+scheduler = AsyncIOScheduler()
+
+def run_ingestion_task():
+    """Arka planda harici API'lerden ilanları çeker, SQLite'a kaydeder ve ChromaDB'yi günceller."""
+    print("[Scheduler] Arka plan ilan çekme ve embedding işlemi başlatılıyor...")
+    try:
+        jobs = fetch_real_jobs()
+        upserted = job_repository.upsert_jobs(jobs)
+        embedded = refresh_embeddings()
+        print(f"[Scheduler] İşlem tamamlandı. Çekilen: {len(jobs)}, SQLite: {upserted}, ChromaDB: {embedded}")
+    except Exception as e:
+        print(f"[Scheduler] Arka plan görevinde hata oluştu: {e}")
+
+@app.on_event("startup")
+async def startup_event():
+    print("[App] API ayağa kalkıyor, arka plan görevleri başlatılıyor...")
+    # Görevi her 6 saatte bir çalışacak şekilde planla
+    scheduler.add_job(run_ingestion_task, "interval", hours=6)
+    scheduler.start()
+    
+    # İlk veritabanı dolumu için API boot sürecini bloklamadan görevi asenkron tetikle
+    asyncio.create_task(asyncio.to_thread(run_ingestion_task))
 
 
 # ---------------------------------------------------------------------------

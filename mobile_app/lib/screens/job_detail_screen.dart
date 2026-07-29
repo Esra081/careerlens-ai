@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import '../services/cv_storage_service.dart';
 import '../services/localization_service.dart';
 import '../widgets/coach_markdown_view.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class JobDetailScreen extends StatefulWidget {
   final Map<String, dynamic> job;
@@ -153,10 +154,44 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('$company ${context.loc('redirecting')}')),
-              );
+            onPressed: () async {
+              final rawUrl = widget.job['url'] ?? widget.job['link'] ?? widget.job['apply_url'] ?? widget.job['redirect_url'] ?? widget.job['job_url'] ?? widget.job['jobUrl'];
+              if (rawUrl != null && rawUrl.toString().isNotEmpty) {
+                String finalUrl = rawUrl.toString().trim().replaceAll(' ', '%20');
+                if (!finalUrl.toLowerCase().startsWith('http')) {
+                  finalUrl = 'https://$finalUrl';
+                }
+                
+                print('DEBUG - AÇILMAYA ÇALIŞILAN URL: $finalUrl');
+                
+                try {
+                  final uri = Uri.tryParse(finalUrl);
+                  if (uri != null) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } else {
+                    throw Exception("Invalid URI");
+                  }
+                } catch (_) {
+                  try {
+                    final uri = Uri.tryParse(finalUrl);
+                    if (uri != null) {
+                      await launchUrl(uri, mode: LaunchMode.platformDefault);
+                    } else {
+                      throw Exception("Invalid URI");
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Link açılamadı: $finalUrl')),
+                      );
+                    }
+                  }
+                }
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Başvuru linkine şu an ulaşılamıyor.')),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryColor,

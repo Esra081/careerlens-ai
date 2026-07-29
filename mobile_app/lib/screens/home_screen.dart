@@ -9,6 +9,7 @@ import '../services/match_helper.dart';
 import 'job_detail_screen.dart';
 import 'upload_cv_screen.dart';
 import 'settings_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -461,8 +462,10 @@ class _HomeScreenState extends State<HomeScreen> {
     // Eşleşme oranına göre dairesel barın rengini belirliyoruz
     Color matchColor = matchValue >= 80 ? Colors.green : (matchValue >= 50 ? Colors.orange : Colors.red);
 
-    return Container(
-      decoration: BoxDecoration(
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => JobDetailScreen(job: job))),
+      child: Container(
+        decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Theme.of(context).dividerColor, width: 1.5), // Görseldeki gibi hafif belirgin sınır
@@ -549,7 +552,46 @@ class _HomeScreenState extends State<HomeScreen> {
                 // HIZLI BAŞVUR BUTONU (Koyu Renkli)
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => JobDetailScreen(job: job))),
+                    onPressed: () async {
+                      print('DEBUG - KARTTAYKI VERİLER: ${job.keys}');
+                      final rawUrl = job['url'] ?? job['link'] ?? job['apply_url'] ?? job['redirect_url'] ?? job['job_url'] ?? job['jobUrl'];
+                      if (rawUrl != null && rawUrl.toString().isNotEmpty) {
+                        String finalUrl = rawUrl.toString().trim().replaceAll(' ', '%20');
+                        if (!finalUrl.toLowerCase().startsWith('http')) {
+                          finalUrl = 'https://$finalUrl';
+                        }
+                        
+                        print('DEBUG - ANASAYFA URL DENENİYOR: $finalUrl');
+                        
+                        try {
+                          final uri = Uri.tryParse(finalUrl);
+                          if (uri != null) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          } else {
+                            throw Exception("Invalid URI");
+                          }
+                        } catch (_) {
+                          try {
+                            final uri = Uri.tryParse(finalUrl);
+                            if (uri != null) {
+                              await launchUrl(uri, mode: LaunchMode.platformDefault);
+                            } else {
+                              throw Exception("Invalid URI");
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Link açılamadı: $finalUrl')),
+                              );
+                            }
+                          }
+                        }
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Başvuru linkine şu an ulaşılamıyor.')),
+                        );
+                      }
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).textTheme.bodyLarge?.color, // Koyu modda beyaz, açıkta koyu
                       foregroundColor: Theme.of(context).cardColor,
@@ -599,7 +641,7 @@ class _HomeScreenState extends State<HomeScreen> {
           )
         ],
       ),
-    );
+    ));
   }
 
   // --- YETENEk RADARI ---

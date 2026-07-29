@@ -144,11 +144,15 @@ def calculate_job_match(cv_skills: list, cv_text: str = "", country: str = "ALL"
             job_skills = original_job.get("required_skills", [])
             ats_details = calculate_ats_score(cv_skills, job_skills, (1 - distance))
 
+            raw_url = original_job.get("link")
+            clean_url = raw_url.strip() if raw_url else None
+
             match_results.append({
                 "id": job_id,
                 "job_title": metadata["title"],
                 "company": metadata["company"],
                 "location": original_job.get("location", "Türkiye"),
+                "url": clean_url,
                 "published_at": original_job.get("published_at", ""),
                 "match_score_int": ats_details["ats_score"],
                 "match_percentage": f"%{ats_details['ats_score']}",

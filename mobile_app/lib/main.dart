@@ -23,7 +23,7 @@ class CareerLensApp extends StatelessWidget {
       builder: (context, child) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'CareerLens AI',
+          title: 'CareerLens',
           themeMode: settingsService.themeMode,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "658875834663",
+    "project_id": "careerlens-5a0e7",
+    "storage_bucket": "careerlens-5a0e7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:658875834663:android:f82c243240a5e434a70902",
+        "android_client_info": {
+          "package_name": "com.example.mobile_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDOHPuoKG0XU4sAMKumFb-E6V2NkaZloy8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -10,12 +10,16 @@ router = APIRouter()
 
 class RewriteRequest(BaseModel):
     old_sentence: str
+    lang: str = "tr"
 
 class CoachRequest(BaseModel):
     target_role: str
     matched_skills: list[str] = []
     missing_skills: list[str]
     ats_score: int
+    skills: list[str] = []
+    experience_level: str = "Junior"
+    lang: str = "tr"
 
 
 # --- AI Yardımcı Endpoint'leri ---
@@ -23,7 +27,7 @@ class CoachRequest(BaseModel):
 @router.post("/api/v1/ai/rewrite")
 async def api_rewrite_cv(request: RewriteRequest):
     """CV deneyim cümlesini AI ile profesyonelleştirir."""
-    new_sentence = rewrite_cv_bullet(request.old_sentence)
+    new_sentence = rewrite_cv_bullet(request.old_sentence, request.lang)
     return {
         "old_sentence": request.old_sentence,
         "improved_sentence": new_sentence,
@@ -32,7 +36,15 @@ async def api_rewrite_cv(request: RewriteRequest):
 @router.post("/api/v1/ai/coach")
 async def api_get_coach(request: CoachRequest):
     """Eksik yeteneklere göre AI kariyer koçluğu verir."""
-    advice = generate_ai_career_coach(request.target_role, request.matched_skills, request.missing_skills, request.ats_score)
+    advice = generate_ai_career_coach(
+        request.target_role, 
+        request.matched_skills, 
+        request.missing_skills, 
+        request.ats_score, 
+        request.lang,
+        request.skills,
+        request.experience_level
+    )
     return {
         "target_role": request.target_role,
         "coach_advice": advice,

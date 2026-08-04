@@ -13,7 +13,18 @@ class ApiService {
   );
 
   // --- CV YÜKLEME ---
-  static Future<Map<String, dynamic>?> uploadCv(PlatformFile file) async {
+  static Future<void> sendFcmToken(String token) async {
+    try {
+      await _dio.post(
+        "$_baseUrl/api/v1/fcm-token",
+        data: {"token": token},
+      );
+    } catch (e) {
+      print("Token gönderim hatası: $e");
+    }
+  }
+
+  static Future<Map<String, dynamic>?> uploadCv(PlatformFile file, {String lang = 'tr'}) async {
     try {
       FormData formData = FormData.fromMap({
         "file": await MultipartFile.fromFile(
@@ -25,6 +36,7 @@ class ApiService {
       Response response = await _dio.post(
         "$_baseUrl/api/v1/analyze-cv",
         data: formData,
+        queryParameters: {'lang': lang},
         options: Options(headers: {"Content-Type": "multipart/form-data"}),
       );
 
@@ -72,24 +84,47 @@ class ApiService {
   // --- İLANLARI ÇEKME (DİO İLE GÜNCELLENDİ) ---
   // null yalnızca istek başarısız olduğunda döner; boş liste geçerli bir
   // güncel yanıttır ve eski ilanlarla değiştirilmemelidir.
-  static Future<Map<String, dynamic>?> fetchMatches({List<dynamic>? skills, String country = "ALL", int skip = 0, int limit = 20}) async {
+  static Future<Map<String, dynamic>?> fetchMatches({
+    List<dynamic>? skills,
+    String experienceLevel = "Junior",
+    String country = "ALL",
+    int skip = 0,
+    int limit = 20,
+    String? experience,
+    String? workModel,
+    num? minSalary,
+    String lang = 'tr',
+  }) async {
     try {
-      final queryParameters = <String, dynamic>{
-        '_': DateTime.now().millisecondsSinceEpoch,
+      final payload = <String, dynamic>{
         'country': country,
         'skip': skip,
         'limit': limit,
+        'lang': lang,
+        'experience_level': experienceLevel,
       };
       if (skills != null && skills.isNotEmpty) {
-        queryParameters['skills'] = skills.join(',');
+        payload['skills'] = skills;
+      } else {
+        payload['skills'] = [];
+      }
+      if (experience != null && experience.isNotEmpty) {
+        payload['experience'] = experience;
+      }
+      if (workModel != null && workModel.isNotEmpty) {
+        payload['work_model'] = workModel;
+      }
+      if (minSalary != null && minSalary > 0) {
+        payload['min_salary'] = minSalary.toInt();
       }
 
-      Response response = await _dio.get(
+      Response response = await _dio.post(
         "$_baseUrl/api/v1/matches",
-        queryParameters: queryParameters,
+        data: payload,
         options: Options(headers: const {
           'Cache-Control': 'no-cache, no-store, max-age=0',
           'Pragma': 'no-cache',
+          'Content-Type': 'application/json',
         }),
       );
 
@@ -110,7 +145,7 @@ class ApiService {
   }
 
   // --- AI KARİYER KOÇU ---
-  static Future<String?> getCoachAdvice(String targetRole, List<String> matchedSkills, List<String> missingSkills, int atsScore) async {
+  static Future<String?> getCoachAdvice(String targetRole, List<String> matchedSkills, List<String> missingSkills, int atsScore, List<String> skills, String experienceLevel, {String lang = 'tr'}) async {
     try {
       Response response = await _dio.post(
         "$_baseUrl/api/v1/ai/coach",
@@ -119,6 +154,9 @@ class ApiService {
           "matched_skills": matchedSkills,
           "missing_skills": missingSkills,
           "ats_score": atsScore,
+          "skills": skills,
+          "experience_level": experienceLevel,
+          "lang": lang,
         },
         options: Options(headers: {"Content-Type": "application/json"}),
       );

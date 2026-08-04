@@ -4,6 +4,7 @@ import 'home_screen.dart';
 import 'ai_coach_screen.dart';
 import 'jobs_screen.dart';
 import 'cv_list_screen.dart';
+import 'profile_screen.dart';
 import '../services/localization_service.dart';
 import '../services/settings_service.dart';
 
@@ -25,6 +26,7 @@ class _MainLayoutState extends State<MainLayout> {
       _NavItem(icon: Icons.auto_awesome, outlinedIcon: Icons.auto_awesome_outlined, label: context.loc('ai_coach')),
       _NavItem(icon: Icons.work_history_rounded, outlinedIcon: Icons.work_outline_rounded, label: context.loc('jobs')),
       _NavItem(icon: Icons.document_scanner_rounded, outlinedIcon: Icons.document_scanner_outlined, label: context.loc('my_cvs')),
+      _NavItem(icon: Icons.person_rounded, outlinedIcon: Icons.person_outline_rounded, label: context.loc('profile')),
     ];
   }
 
@@ -38,6 +40,7 @@ class _MainLayoutState extends State<MainLayout> {
           AiCoachScreen(),
           JobListScreen(),
           CvListScreen(),
+          ProfileScreen(),
         ];
         
         return Scaffold(

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../core/theme/app_theme.dart';
 import '../services/localization_service.dart';
+import 'package:provider/provider.dart';
+import '../providers/user_provider.dart';
 
 import '../services/api_service.dart';
 import '../services/cv_storage_service.dart';
@@ -30,11 +32,16 @@ class _CareerCoachCardState extends State<CareerCoachCard> {
       final missing = widget.cvData['missing_skills'] ?? [];
       final atsScore = MatchHelper.resolveAtsScore(widget.cvData, widget.cvData['job_matches'] ?? []);
       
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+
       String? newAdvice = await ApiService.getCoachAdvice(
         "Software Engineer", 
         List<String>.from(matched), 
         List<String>.from(missing), 
-        atsScore
+        atsScore,
+        userProvider.skills,
+        userProvider.experienceLevel,
+        lang: Localizations.localeOf(context).languageCode
       );
 
       if (newAdvice != null && mounted) {

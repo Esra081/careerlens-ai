@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
+import 'package:provider/provider.dart';
+import '../providers/user_provider.dart';
 import '../services/cv_storage_service.dart';
 import '../services/api_service.dart';
 import '../services/match_helper.dart';
@@ -53,12 +55,14 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
         final existingMatches = MatchHelper.getJobMatches(_cvData!);
         if (existingMatches.isEmpty) {
           try {
-            final skills = _cvData!['parsed_skills'] as List<dynamic>?;
+            final userProvider = Provider.of<UserProvider>(context, listen: false);
             final result = await ApiService.fetchMatches(
-              skills: skills,
+              skills: userProvider.skills,
+              experienceLevel: userProvider.experienceLevel,
               country: 'ALL',
               skip: 0,
               limit: 10,
+              lang: Localizations.localeOf(context).languageCode,
             );
             if (result != null) {
               final matches = result['matches'] as List<dynamic>? ?? [];

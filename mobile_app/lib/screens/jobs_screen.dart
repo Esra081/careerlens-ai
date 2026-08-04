@@ -3,6 +3,8 @@ import '../core/theme/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/cv_storage_service.dart';
 import '../services/localization_service.dart';
+import 'package:provider/provider.dart';
+import '../providers/user_provider.dart';
 import 'job_detail_screen.dart';
 
 class JobListScreen extends StatefulWidget {
@@ -22,6 +24,10 @@ class _JobListScreenState extends State<JobListScreen> {
   int _skip = 0;
   final int _limit = 20;
   bool _isFetchingMore = false;
+  
+  String? _selectedExperience;
+  String? _selectedWorkModel;
+  double _minSalary = 0;
   int _totalJobs = 0;
 
   String _selectedCountryKey = "all";
@@ -69,11 +75,17 @@ class _JobListScreenState extends State<JobListScreen> {
         case 'germany': countryCode = 'DE'; break;
         default: countryCode = 'ALL';
       }
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
       final newData = await ApiService.fetchMatches(
-        skills: storedData?['parsed_skills'] as List<dynamic>?,
+        skills: userProvider.skills,
+        experienceLevel: userProvider.experienceLevel,
         country: countryCode,
         skip: _skip,
         limit: _limit,
+        experience: _selectedExperience,
+        workModel: _selectedWorkModel,
+        minSalary: _minSalary,
+        lang: Localizations.localeOf(context).languageCode,
       );
       
       if (!mounted) return;
@@ -115,11 +127,17 @@ class _JobListScreenState extends State<JobListScreen> {
         case 'germany': countryCode = 'DE'; break;
         default: countryCode = 'ALL';
       }
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
       final liveData = await ApiService.fetchMatches(
-        skills: storedData?['parsed_skills'] as List<dynamic>?,
+        skills: userProvider.skills,
+        experienceLevel: userProvider.experienceLevel,
         country: countryCode,
         skip: _skip,
         limit: _limit,
+        experience: _selectedExperience,
+        workModel: _selectedWorkModel,
+        minSalary: _minSalary,
+        lang: Localizations.localeOf(context).languageCode,
       );
 
       if (!mounted) return;
@@ -206,6 +224,151 @@ class _JobListScreenState extends State<JobListScreen> {
     }
   }
 
+  void _showFilterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                top: 24,
+                left: 24,
+                right: 24,
+              ),
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      "Filtreler",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).textTheme.titleLarge?.color,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text("Deneyim", style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).textTheme.bodyMedium?.color)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: ["Junior", "Mid", "Senior", "Lead"].map((exp) {
+                        final isSelected = _selectedExperience == exp;
+                        return ChoiceChip(
+                          label: Text(exp),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            setModalState(() => _selectedExperience = selected ? exp : null);
+                          },
+                          selectedColor: AppTheme.primaryColor.withValues(alpha: 0.2),
+                          labelStyle: TextStyle(
+                            color: isSelected ? AppTheme.primaryColor : Colors.grey.shade600,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    Text("Çalışma Modeli", style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).textTheme.bodyMedium?.color)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: ["Remote", "Hybrid", "On-site"].map((model) {
+                        final isSelected = _selectedWorkModel == model;
+                        return ChoiceChip(
+                          label: Text(model),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            setModalState(() => _selectedWorkModel = selected ? model : null);
+                          },
+                          selectedColor: AppTheme.primaryColor.withValues(alpha: 0.2),
+                          labelStyle: TextStyle(
+                            color: isSelected ? AppTheme.primaryColor : Colors.grey.shade600,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text("Minimum Maaş", style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).textTheme.bodyMedium?.color)),
+                        Text("${(_minSalary / 1000).truncate()}K", style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
+                      ],
+                    ),
+                    Slider(
+                      value: _minSalary,
+                      min: 0,
+                      max: 200000,
+                      divisions: 40,
+                      activeColor: AppTheme.primaryColor,
+                      onChanged: (val) {
+                        setModalState(() => _minSalary = val);
+                      },
+                    ),
+                    const SizedBox(height: 32),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                            },
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text("Geri"),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _loadAllJobs(); // Trigger reload with new filters
+                            },
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              backgroundColor: AppTheme.primaryColor,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text("Uygula", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -275,7 +438,12 @@ class _JobListScreenState extends State<JobListScreen> {
                       letterSpacing: 0.2,
                     ),
                   ),
-                  Icon(Icons.tune_rounded, size: 20, color: Colors.grey.shade400),
+                  IconButton(
+                    icon: Icon(Icons.tune_rounded, size: 20, color: Colors.grey.shade400),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: _showFilterBottomSheet,
+                  ),
                 ],
               ),
             ),
@@ -427,6 +595,13 @@ class _JobListScreenState extends State<JobListScreen> {
     final String jobId = _jobId(job);
     final bool isBookmarked = _bookmarkedIds.contains(jobId);
 
+    // Maaş bilgisini ayıklayalım
+    String? salaryText;
+    final rawSalary = job['salary'];
+    if (rawSalary != null && rawSalary.toString().trim().isNotEmpty && rawSalary.toString().toLowerCase() != 'null') {
+      salaryText = rawSalary.toString().trim();
+    }
+
     var rawAts = job['ats_score'] ?? job['atsScore'];
     int matchValue;
     if (rawAts != null) {
@@ -449,16 +624,16 @@ class _JobListScreenState extends State<JobListScreen> {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Theme.of(context).dividerColor, width: 1.5),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.3), width: 1),
           boxShadow: [
             BoxShadow(
               color: Theme.of(context).brightness == Brightness.light
-                  ? Colors.black.withValues(alpha: 0.035)
+                  ? Colors.black.withValues(alpha: 0.025)
                   : Colors.transparent,
-              blurRadius: 16,
-              spreadRadius: 0,
-              offset: const Offset(0, 4),
+              blurRadius: 24,
+              spreadRadius: -2,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
@@ -497,6 +672,7 @@ class _JobListScreenState extends State<JobListScreen> {
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
                       color: Theme.of(context).textTheme.bodyLarge?.color,
+                      letterSpacing: -0.2,
                       height: 1.2,
                     ),
                     maxLines: 2,
@@ -513,6 +689,46 @@ class _JobListScreenState extends State<JobListScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: 8),
+                  salaryText != null
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.attach_money_rounded, size: 14, color: Color(0xFF10B981)),
+                              const SizedBox(width: 2),
+                              Text(
+                                salaryText,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF10B981),
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.money_off_csred_rounded, size: 14, color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.3)),
+                            const SizedBox(width: 4),
+                            Text(
+                              "Maaş Belirtilmemiş",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.4),
+                              ),
+                            ),
+                          ],
+                        ),
                 ],
               ),
             ),

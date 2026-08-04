@@ -4,6 +4,8 @@ import '../core/theme/app_theme.dart';
 import '../services/cv_storage_service.dart';
 import '../services/api_service.dart';
 import '../services/localization_service.dart';
+import 'package:provider/provider.dart';
+import '../providers/user_provider.dart';
 import '../services/match_helper.dart';
 
 class CvListScreen extends StatefulWidget {
@@ -50,7 +52,7 @@ class _CvListScreenState extends State<CvListScreen> {
         });
 
         PlatformFile file = result.files.single;
-        final analysisData = await ApiService.uploadCv(file);
+        final analysisData = await ApiService.uploadCv(file, lang: Localizations.localeOf(context).languageCode);
 
         if (analysisData != null) {
           await cvStorageService.addCv(analysisData, file.name, notify: false);
@@ -59,12 +61,14 @@ class _CvListScreenState extends State<CvListScreen> {
           // CV eklenir eklenmez, en güncel ilanları çekip CV verisine yaz.
           // notify: false verdiğimiz için ana ekran tetiklenmeyecek, ta ki updateCvData çalışana kadar.
           try {
-            final skills = analysisData['parsed_skills'] as List<dynamic>?;
+            final userProvider = Provider.of<UserProvider>(context, listen: false);
             final matchResult = await ApiService.fetchMatches(
-              skills: skills,
+              skills: userProvider.skills,
+              experienceLevel: userProvider.experienceLevel,
               country: 'ALL',
               skip: 0,
               limit: 10,
+              lang: Localizations.localeOf(context).languageCode,
             );
             if (matchResult != null) {
               final matches = matchResult['matches'] as List<dynamic>? ?? [];
@@ -153,12 +157,14 @@ class _CvListScreenState extends State<CvListScreen> {
       final existingMatches = MatchHelper.getJobMatches(cvData);
       if (existingMatches.isEmpty) {
         try {
-          final skills = cvData['parsed_skills'] as List<dynamic>?;
+          final userProvider = Provider.of<UserProvider>(context, listen: false);
           final matchResult = await ApiService.fetchMatches(
-            skills: skills,
+            skills: userProvider.skills,
+            experienceLevel: userProvider.experienceLevel,
             country: 'ALL',
             skip: 0,
             limit: 10,
+            lang: Localizations.localeOf(context).languageCode,
           );
           if (matchResult != null) {
             final matches = matchResult['matches'] as List<dynamic>? ?? [];

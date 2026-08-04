@@ -5,12 +5,47 @@ import 'core/theme/app_theme.dart';
 import 'services/settings_service.dart';
 
 import 'services/cv_storage_service.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'services/api_service.dart';
+import 'package:provider/provider.dart';
+import 'providers/user_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Firebase Başlatma
+  await Firebase.initializeApp();
+  
+  // İzin ve Token Alma
+  FirebaseMessaging messaging = FirebaseMessaging.instance;
+  await messaging.requestPermission();
+  
+  final fcmToken = await messaging.getToken();
+  print('================ FCM TOKEN ================');
+  print(fcmToken);
+  print('===========================================');
+  
+  if (fcmToken != null) {
+    await ApiService.sendFcmToken(fcmToken);
+  }
+  
+  // Ön Plan Dinleyicisi
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    print('ÖN PLANDA BİLDİRİM GELDİ: ${message.notification?.title}');
+  });
+
   await settingsService.loadSettings();
   await cvStorageService.init();
-  runApp(const CareerLensApp());
+  
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+      ],
+      child: const CareerLensApp(),
+    ),
+  );
 }
 
 class CareerLensApp extends StatelessWidget {

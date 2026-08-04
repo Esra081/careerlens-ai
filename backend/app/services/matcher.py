@@ -74,14 +74,25 @@ def refresh_embeddings() -> int:
 # İş Eşleştirme (her /matches isteğinde çağrılır — hızlı, API çağrısı yok)
 # ---------------------------------------------------------------------------
 
-def calculate_job_match(cv_skills: list, cv_text: str = "", country: str = "ALL", skip: int = 0, limit: int = 20) -> tuple[int, list]:
+import re
+
+def calculate_job_match(
+    cv_skills: list,
+    cv_text: str = "",
+    country: str = "ALL",
+    skip: int = 0,
+    limit: int = 20,
+    experience: str = None,
+    work_model: str = None,
+    min_salary: int = None
+) -> tuple[int, list]:
     """CV yeteneklerini SQLite'taki ilanlarla ChromaDB üzerinden eşleştirir.
 
     Canlı API çağrısı YAPMAZ. Veriler ingest sırasında doldurulmuş
     SQLite + ChromaDB'den okunur.
     """
     if not cv_skills:
-        return []
+        return 0, []
 
     # ChromaDB boşsa (hiç ingest yapılmamışsa) kullanıcıya bilgi ver
     total_in_db = _collection.count()
@@ -141,6 +152,53 @@ def calculate_job_match(cv_skills: list, cv_text: str = "", country: str = "ALL"
             if not original_job:
                 continue
 
+            # --- POST-FILTERING ---
+            title_desc = (original_job.get("title", "") + " " + original_job.get("description", "")).lower()
+            
+            if experience:
+                exp_lower = experience.lower()
+                junior_keywords = ['junior', 'jr', 'entry level', 'new grad', 'intern', '0-1', '0-2']
+                senior_keywords = ['senior', 'sr', 'lead', 'principal', 'staff', 'manager', '5+']
+                mid_keywords = ['mid', 'intermediate']
+                
+                has_junior = any(k in title_desc for k in junior_keywords)
+                has_senior = any(k in title_desc for k in senior_keywords)
+                has_mid = any(k in title_desc for k in mid_keywords)
+                
+                if exp_lower == 'junior' and not has_junior:
+                    continue
+                elif exp_lower == 'senior' and not has_senior:
+                    continue
+                elif exp_lower == 'mid':
+                    # Accept if explicitly mid OR if no junior/senior keywords exist (defaulting to mid)
+                    if not has_mid and (has_junior or has_senior):
+                        continue
+                
+            if work_model and work_model.lower() not in title_desc:
+                continue
+                
+            if min_salary is not None and min_salary > 0:
+                salary_str = original_job.get("salary")
+                if not salary_str:
+                    continue
+                
+                clean_sal = str(salary_str).lower().replace(',', '')
+                numbers = re.findall(r'\d+', clean_sal)
+                if not numbers:
+                    continue
+                    
+                val = int(numbers[0])
+                if val < 1000 and "k" in clean_sal:
+                    val *= 1000
+                if "hour" in clean_sal or "hr" in clean_sal:
+                    val *= 2000
+                if "month" in clean_sal or "mo" in clean_sal:
+                    val *= 12
+                    
+                if val < min_salary:
+                    continue
+            # ----------------------
+
             job_skills = original_job.get("required_skills", [])
             ats_details = calculate_ats_score(cv_skills, job_skills, (1 - distance))
 
@@ -159,6 +217,8 @@ def calculate_job_match(cv_skills: list, cv_text: str = "", country: str = "ALL"
                 "matched_skills": ats_details["matched_skills"],
                 "missing_skills": ats_details["missing_skills"],
                 "ats_details": ats_details,
+                "salary": original_job.get("salary"),
+                "description": str(original_job.get("description") or original_job.get("snippet") or ""),
             })
 
 

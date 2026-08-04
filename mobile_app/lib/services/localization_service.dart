@@ -105,9 +105,9 @@ class LocalizationService {
       'turkish': 'Türkçe',
       'english': 'English',
       'german': 'Deutsch',
-      'lang_tr': 'Türkçe',
-      'lang_en': 'İngilizce',
-      'lang_de': 'Almanca',
+      'lang_tr': 'Türkçe (TR)',
+      'lang_en': 'English (EN)',
+      'lang_de': 'Deutsch (DE)',
 
       // Outreach & Planner
       'outreach_btn': 'İşe Alım Uzmanına Mesaj Hazırla',
@@ -121,6 +121,15 @@ class LocalizationService {
       'month': 'Ay',
       'planner_hide': 'Rotamı Gizle',
       'planner_draw': 'Rotamı Çiz',
+
+      // Profile Screen
+      'profile': 'Profil',
+      'experience_level': 'Deneyim Seviyesi',
+      'tech_stack': 'Yetkinliklerim',
+      'add_skill_hint': 'Yeni yetenek ekle...',
+      'junior': 'Junior',
+      'mid': 'Mid',
+      'senior': 'Senior',
 
       // General
       'error': 'Hata',
@@ -223,9 +232,9 @@ class LocalizationService {
       'turkish': 'Türkçe',
       'english': 'English',
       'german': 'Deutsch',
-      'lang_tr': 'Turkish',
-      'lang_en': 'English',
-      'lang_de': 'German',
+      'lang_tr': 'Türkçe (TR)',
+      'lang_en': 'English (EN)',
+      'lang_de': 'Deutsch (DE)',
 
       // Outreach & Planner
       'outreach_btn': 'Prepare Message for Recruiter',
@@ -239,6 +248,15 @@ class LocalizationService {
       'month': 'Month',
       'planner_hide': 'Hide My Path',
       'planner_draw': 'Draw My Path',
+
+      // Profile Screen
+      'profile': 'Profile',
+      'experience_level': 'Experience Level',
+      'tech_stack': 'Tech Stack',
+      'add_skill_hint': 'Add new skill...',
+      'junior': 'Junior',
+      'mid': 'Mid',
+      'senior': 'Senior',
 
       'error': 'Error',
       'loading': 'Loading...',
@@ -342,9 +360,9 @@ class LocalizationService {
       'turkish': 'Türkçe',
       'english': 'English',
       'german': 'Deutsch',
-      'lang_tr': 'Türkisch',
-      'lang_en': 'Englisch',
-      'lang_de': 'Deutsch',
+      'lang_tr': 'Türkçe (TR)',
+      'lang_en': 'English (EN)',
+      'lang_de': 'Deutsch (DE)',
 
       // Outreach & Planner
       'outreach_btn': 'Nachricht an Recruiter vorbereiten',
@@ -358,6 +376,15 @@ class LocalizationService {
       'month': 'Monat',
       'planner_hide': 'Meinen Pfad verbergen',
       'planner_draw': 'Meinen Pfad zeichnen',
+
+      // Profile Screen
+      'profile': 'Profil',
+      'experience_level': 'Erfahrungsstufe',
+      'tech_stack': 'Meine Fähigkeiten',
+      'add_skill_hint': 'Neue Fähigkeit hinzufügen...',
+      'junior': 'Junior',
+      'mid': 'Mid',
+      'senior': 'Senior',
 
       'error': 'Fehler',
       'loading': 'Wird geladen...',

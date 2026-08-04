@@ -30,10 +30,15 @@ def initialize() -> None:
                 required_skills TEXT NOT NULL DEFAULT '[]',
                 published_at TEXT,
                 fetched_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                salary TEXT
             )
             """
         )
+        try:
+            connection.execute("ALTER TABLE jobs ADD COLUMN salary TEXT")
+        except sqlite3.OperationalError:
+            pass
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_jobs_filters ON jobs(country, published_at, source)"
         )
@@ -62,6 +67,7 @@ def upsert_jobs(jobs: list[dict]) -> int:
             job.get("published_at"),
             now,
             now,
+            job.get("salary"),
         ))
 
     if not records:
@@ -73,14 +79,15 @@ def upsert_jobs(jobs: list[dict]) -> int:
             """
             INSERT INTO jobs (
                 id, source, title, company, location, country, description,
-                apply_url, required_skills, published_at, fetched_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                apply_url, required_skills, published_at, fetched_at, updated_at, salary
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 title=excluded.title, company=excluded.company, location=excluded.location,
                 country=excluded.country, description=excluded.description,
                 apply_url=excluded.apply_url, required_skills=excluded.required_skills,
                 published_at=COALESCE(excluded.published_at, jobs.published_at),
-                fetched_at=excluded.fetched_at, updated_at=excluded.updated_at
+                fetched_at=excluded.fetched_at, updated_at=excluded.updated_at,
+                salary=excluded.salary
             """,
             records,
         )
@@ -116,7 +123,7 @@ def list_jobs(
         rows = connection.execute(
             f"""
             SELECT id, source, title, company, location, country, description,
-                   apply_url, required_skills, published_at, fetched_at
+                   apply_url, required_skills, published_at, fetched_at, salary
             FROM jobs {where}
             ORDER BY COALESCE(published_at, fetched_at) DESC
             LIMIT ? OFFSET ?
@@ -140,6 +147,7 @@ def all_jobs_for_matching() -> list[dict]:
             "description": job.get("description", ""),
             "link": job.get("apply_url"),
             "published_at": job.get("published_at") or job.get("fetched_at", ""),
+            "salary": job.get("salary"),
         }
         for job in jobs
     ]

@@ -43,6 +43,9 @@ dependencies:
   google_fonts: ^6.2.1
   flutter_markdown: ^0.7.7
   url_launcher: ^6.3.2
+  firebase_core: ^4.12.1
+  firebase_messaging: ^16.4.3
+  provider: ^6.1.5+1
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1

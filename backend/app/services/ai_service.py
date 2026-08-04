@@ -1,5 +1,5 @@
 import os
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 
 # .env dosyasındaki ayarları yükle
@@ -8,28 +8,27 @@ load_dotenv()
 # --- TEK NOKTADAN GEMİNİ YAPILANDIRMASI ---
 # Tüm AI fonksiyonları bu dosyadaki model örneğini kullanır.
 _api_key = os.getenv("GEMINI_API_KEY")
-_model = None
+_client = None
 if _api_key:
-    genai.configure(api_key=_api_key)
-    _model = genai.GenerativeModel('models/gemini-3.5-flash')
+    _client = genai.Client(api_key=_api_key)
 else:
     print("UYARI: GEMINI_API_KEY bulunamadı! AI özellikleri devre dışı.")
 
 
-def _require_model():
-    """Model yapılandırılmamışsa açık hata verir."""
-    if _model is None:
+def _require_client():
+    """Client yapılandırılmamışsa açık hata verir."""
+    if _client is None:
         raise RuntimeError(
             "AI modeli yapılandırılamadı. Lütfen .env dosyasındaki GEMINI_API_KEY değerini kontrol edin."
         )
-    return _model
+    return _client
 
 
 import json
 
 def extract_skills_via_ai(text: str) -> list:
     """Gemini modelini kullanarak metinden yetenekleri (teknik beceriler) yapılandırılmış JSON olarak çıkarır."""
-    model = _require_model()
+    client = _require_client()
     prompt = f"""
 Sen uzman bir teknik İK analistisin.
 Aşağıdaki CV metninde yer alan tüm teknik becerileri (yazılım dilleri, frameworkler, araçlar, veritabanları, teknolojiler) çıkar.
@@ -44,7 +43,7 @@ Metin:
     max_retries = 2
     for attempt in range(max_retries):
         try:
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
             content = response.text.strip()
             
             # Olası markdown kalıntılarını temizle
@@ -71,9 +70,9 @@ Metin:
             raise e # Hata fırlat ki fallback devreye girsin
 
 
-def rewrite_cv_bullet(old_text: str) -> str:
+def rewrite_cv_bullet(old_text: str, lang: str = "tr") -> str:
     """Basit cümleleri etkileyici ATS cümlelerine çevirir."""
-    model = _require_model()
+    client = _require_client()
     prompt = f"""
     Sen profesyonel bir İK uzmanı ve teknik işe alımcısın (Tech Recruiter).
     Aşağıdaki CV deneyim cümlesini daha profesyonel, sonuç odaklı ve güçlü aksiyon fiilleri (action verbs) içeren bir hale getir. 
@@ -81,30 +80,37 @@ def rewrite_cv_bullet(old_text: str) -> str:
     Sadece düzeltilmiş yeni cümleyi dön, fazladan açıklama yapma.
     
     Eski Cümle: {old_text}
+    
+    CRITICAL RULE: You MUST generate your entire response strictly in the following language code: '{lang}' (e.g., 'tr' for Turkish, 'de' for German, 'en' for English). Do not use any other language.
     """
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
         return response.text.strip()
     except Exception as e:
         return f"Yapay zeka hatası: {str(e)}"
 
 
-def generate_ai_career_coach(target_role: str, matched_skills: list, missing_skills: list, ats_score: int = 0) -> str:
+def generate_ai_career_coach(target_role: str, matched_skills: list, missing_skills: list, ats_score: int = 0, lang: str = "tr", skills: list = None, experience_level: str = "Junior") -> str:
     """Gemini API'sine bağlanıp acımasız ve gerçekçi dinamik mentorluk metni üretir."""
-    model = _require_model()
+    client = _require_client()
     
     matched_str = ", ".join(matched_skills) if matched_skills else "Belirtilmemiş"
     missing_str = ", ".join(missing_skills) if missing_skills else "Belirtilmemiş"
+    all_skills_str = ", ".join(skills) if skills else "Belirtilmemiş"
 
     prompt = f"""
 Sen acımasız, aşırı gerçekçi ve son derece titiz bir Senior Tech Recruiter ve Engineering Manager'sın.
 ASLA "Harika bir CV", "Çok iyisin", "Mükemmel" gibi sahte övgüler yapma. Adayın eksiklerini net, sert ve yapıcı bir dille yüzüne vur.
 Karşındaki kişi "{target_role}" ilanı için BAŞVURAN bir aday.
+Adayın Deneyim Seviyesi: {experience_level}
 Adayın Anlamsal Uyum (ATS) Skoru: {ats_score}/100.
-Adayın Sahip Olduğu Yetenekler: {matched_str}
+Adayın Bildiği Tüm Yetenekler: {all_skills_str}
+Adayın Sahip Olduğu Yetenekler (İlanla Eşleşen): {matched_str}
 Adayın Eksik Olduğu (İlanda İstenen) Yetenekler: {missing_str}
 
-Yanıtın KESİNLİKLE aşağıdaki 3 başlığı (tam olarak bu isimlerle) içermelidir ve profesyonel/sert bir Türkçe ile yazılmalıdır:
+Gelen iş ilanı metni hangi dilde olursa olsun, özetlemeyi KESİNLİKLE kullanıcının talep ettiği hedef dilde ({lang}) yap ve çevir. Sonuç her zaman hedef dilde olmalı.
+
+Yanıtın KESİNLİKLE aşağıdaki 3 başlığı (tam olarak bu isimlerle) içermelidir ve profesyonel/sert bir dille ({lang}) yazılmalıdır:
 
 1. Gerçekçi Uyum Analizi
 CV ile ilan arasındaki uçurum nerede? Aday neden doğrudan reddedilebilir? (Lafı dolandırmadan net bir şekilde söyle). Eğer skor çok yüksekse bile rehavete kapılmaması gerektiğini söyle.
@@ -117,16 +123,18 @@ Adayın sahip olduğu yeteneklerden birini seç. Sıradan bir cümleyi STAR (Sit
 Örnek format:
 - Eski Hal: [Seçtiğin yetenekle ilgili sıradan bir cümle]
 - Olması Gereken Hal: [STAR formatında, metrik içeren profesyonel cümle]
+
+CRITICAL RULE: You MUST generate your entire response strictly in the following language code: '{lang}' (e.g., 'tr' for Turkish, 'de' for German, 'en' for English). Do not use any other language.
 """
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
         return response.text.strip()
     except Exception as e:
         print(f"🚨 GEMINI HATASI (AI Koç): {str(e)}")
         return "Yapay zeka analizi şu an kullanılamıyor. Lütfen eksik becerilerinizi tamamlamaya odaklanın."
 
 
-def generate_career_advice(job_matches: list) -> dict:
+def generate_career_advice(job_matches: list, lang: str = "tr") -> dict:
     """Flutter arayüzüne gönderilecek nihai AI tavsiye paketini hazırlar."""
     if not job_matches:
         return {"summary": "Analiz edilecek eşleşme bulunamadı."}
@@ -139,7 +147,7 @@ def generate_career_advice(job_matches: list) -> dict:
     ats_score = top_match.get("match_score_int", 0)
 
     # Gemini'den dinamik koçluk metnini (summary) al
-    ai_summary = generate_ai_career_coach(target_role, matched_skills, missing_skills, ats_score)
+    ai_summary = generate_ai_career_coach(target_role, matched_skills, missing_skills, ats_score, lang)
 
     # Flutter arayüzünün alt alta madde madde (bullet point) basabilmesi için
     # eksik yetenekleri JSON listesi formatında tutuyoruz.

@@ -13,7 +13,9 @@ from app.services.matcher import calculate_job_match, refresh_embeddings
 from app.services.ai_service import generate_career_advice
 from app.services.job_api import fetch_real_jobs
 from app.services import job_repository
+from app.services.notification_service import init_firebase, send_job_match_notification
 from app.routers.cv_router import router as cv_router
+from pydantic import BaseModel
 
 app = FastAPI(title="CareerLens AI", version="0.2.0")
 
@@ -45,12 +47,41 @@ def run_ingestion_task():
         upserted = job_repository.upsert_jobs(jobs)
         embedded = refresh_embeddings()
         print(f"[Scheduler] İşlem tamamlandı. Çekilen: {len(jobs)}, SQLite: {upserted}, ChromaDB: {embedded}")
+        
+        # --- OTOMATİK BİLDİRİM MANTIĞI ---
+        # TODO: Multi-user yapısına geçildiğinde DB'den yetenekler çekilerek çalıştırılacak
+        """
+        token_path = "fcm_token.txt"
+        if os.path.exists(token_path) and os.path.exists(PROFILE_FILE):
+            with open(token_path, "r") as f:
+                token = f.read().strip()
+                
+            if token:
+                with open(PROFILE_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    user_skills = data.get("skills", [])
+                    
+                if user_skills:
+                    raw_text = " ".join(user_skills)
+                    _, all_matches = calculate_job_match(user_skills, raw_text, "ALL", 0, 5)
+                    if all_matches and len(all_matches) > 0:
+                        top_match = all_matches[0]
+                        score = top_match.get("match_score_int", 0)
+                        if score >= 75:
+                            print(f"[Scheduler] Yüksek eşleşme bulundu! Bildirim atılıyor... %{score}")
+                            send_job_match_notification(token, top_match["job_title"], top_match["company"], score)
+        """
+                            
     except Exception as e:
         print(f"[Scheduler] Arka plan görevinde hata oluştu: {e}")
 
 @app.on_event("startup")
 async def startup_event():
     print("[App] API ayağa kalkıyor, arka plan görevleri başlatılıyor...")
+    
+    # Firebase'i başlat
+    init_firebase()
+    
     # Görevi her 6 saatte bir çalışacak şekilde planla
     scheduler.add_job(run_ingestion_task, "interval", hours=6)
     scheduler.start()
@@ -63,6 +94,34 @@ async def startup_event():
 # API Endpoint'leri
 # ---------------------------------------------------------------------------
 
+class FcmTokenRequest(BaseModel):
+    token: str
+
+@app.post("/api/v1/fcm-token")
+def save_fcm_token(req: FcmTokenRequest):
+    """Gelen FCM Token'ı dosyaya kaydeder."""
+    try:
+        with open("fcm_token.txt", "w") as f:
+            f.write(req.token)
+        return {"status": "success", "message": "Token kaydedildi."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Token kaydedilemedi.")
+
+class TestNotificationRequest(BaseModel):
+    token: str
+    job_title: str
+    company: str
+    score: int
+
+@app.post("/api/v1/test-notification")
+def test_notification(req: TestNotificationRequest):
+    """FCM Token kullanarak cihaza test bildirimi yollar."""
+    success = send_job_match_notification(req.token, req.job_title, req.company, req.score)
+    if success:
+        return {"status": "success", "message": "Bildirim başarıyla gönderildi."}
+    else:
+        raise HTTPException(status_code=500, detail="Bildirim gönderilemedi.")
+
 @app.post("/api/v1/upload-cv")
 async def upload_cv(file: UploadFile = File(...)):
     """CV yükler, PDF'den yetenekleri çıkarır ve profili kaydeder."""
@@ -74,34 +133,43 @@ async def upload_cv(file: UploadFile = File(...)):
         raw_text = extract_text_from_pdf(file_bytes)
         extracted_skills = extract_skills(raw_text)
 
-        # Çıkarılan yetenekleri ve ham metni yerel bir dosyaya kaydet
-        with open(PROFILE_FILE, "w", encoding="utf-8") as f:
-            json.dump({"skills": extracted_skills, "raw_text": raw_text}, f)
-
         return {"message": "CV başarıyla kaydedildi.", "skills": extracted_skills}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"CV Yükleme Hatası: {str(e)}")
 
 
-@app.get("/api/v1/matches")
-async def get_matches(skills: str | None = None, country: str = "ALL", skip: int = 0, limit: int = 20):
+class MatchRequest(BaseModel):
+    skills: list[str] = []
+    experience_level: str = "Junior"
+    country: str = "ALL"
+    skip: int = 0
+    limit: int = 20
+    experience: str | None = None
+    work_model: str | None = None
+    min_salary: int | None = None
+    lang: str = "tr"
+
+@app.post("/api/v1/matches")
+async def get_matches(request: MatchRequest):
     """Kullanıcının yeteneklerine göre iş ilanı eşleşmelerini döndürür."""
-    # Kayıtlı CV yeteneklerini oku
-    if skills:
-        user_skills = [skill.strip() for skill in skills.split(",") if skill.strip()]
-        with open(PROFILE_FILE, "w", encoding="utf-8") as profile_file:
-            json.dump({"skills": user_skills}, profile_file)
-    elif not os.path.exists(PROFILE_FILE):
-        return {"error": "Önce CV yüklemelisiniz."}
-    else:
-        with open(PROFILE_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            user_skills = data.get("skills", [])
-            raw_text = data.get("raw_text", "")
+    # profile.json'a yazma işlemini TAMAMEN SİL.
+    user_skills = [skill.strip() for skill in request.skills if skill.strip()]
+    
+    if not user_skills:
+        return {"error": "Lütfen önce yeteneklerinizi belirleyin."}
 
     raw_text = " ".join(user_skills)
 
-    total_matches, all_matches = calculate_job_match(user_skills, raw_text, country, skip, limit)
+    total_matches, all_matches = calculate_job_match(
+        cv_skills=user_skills,
+        cv_text=raw_text,
+        country=request.country,
+        skip=request.skip,
+        limit=request.limit,
+        experience=request.experience,
+        work_model=request.work_model,
+        min_salary=request.min_salary
+    )
     response = {
         "total": total_matches,
         "matches": all_matches,
@@ -153,7 +221,7 @@ def ingest_jobs():
 
 
 @app.post("/api/v1/analyze-cv")
-async def analyze_cv_endpoint(file: UploadFile = File(...), country: str = "ALL"):
+async def analyze_cv_endpoint(file: UploadFile = File(...), country: str = "ALL", lang: str = "tr"):
     """Tam CV analiz pipeline'ı: PDF → yetenek çıkarma → ATS skoru → eşleştirme → AI koçluk."""
     if not file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Sadece PDF formatı desteklenmektedir.")
@@ -168,11 +236,6 @@ async def analyze_cv_endpoint(file: UploadFile = File(...), country: str = "ALL"
         # 3. Yetenekleri çıkar (extractor.py)
         extracted_skills = extract_skills(raw_text)
 
-        # /matches endpoint'i aynı CV yeteneklerini kullanarak daha sonra
-        # güncel ilanları eşleştirebilsin diye profili kaydet.
-        with open(PROFILE_FILE, "w", encoding="utf-8") as profile_file:
-            json.dump({"skills": extracted_skills, "raw_text": raw_text}, profile_file)
-
         # 4. İş Eşleştirmesi Yap (matcher.py)
         # Sadece en iyi 3 eşleşme için limit veriyoruz
         _, job_matches = calculate_job_match(extracted_skills, raw_text, country, limit=3)
@@ -185,7 +248,7 @@ async def analyze_cv_endpoint(file: UploadFile = File(...), country: str = "ALL"
 
         # 6. AI Kariyer Tavsiyesi Al (ai_service.py)
         # Sadece en iyi eşleşen ilan için tavsiye üretiyoruz
-        career_advice = generate_career_advice(job_matches)
+        career_advice = generate_career_advice(job_matches, target_language=lang)
 
         # Sonuçları JSON olarak dön
         return {

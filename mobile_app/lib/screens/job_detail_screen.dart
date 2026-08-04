@@ -7,6 +7,8 @@ import '../services/cv_storage_service.dart';
 import '../services/localization_service.dart';
 import '../widgets/coach_markdown_view.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
+import '../providers/user_provider.dart';
 
 class JobDetailScreen extends StatefulWidget {
   final Map<String, dynamic> job;
@@ -31,6 +33,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   late final List<String> matchedSkills;
   late final List<String> missingSkills;
   late final String description;
+  String? salaryText;
 
   @override
   void initState() {
@@ -41,6 +44,13 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     company = job['company'] ?? 'Şirket';
     location = job['location'] ?? '';
     description = job['description'] ?? job['job_description'] ?? '';
+
+    final rawSalary = job['salary'];
+    if (rawSalary != null && rawSalary.toString().trim().isNotEmpty && rawSalary.toString().toLowerCase() != 'null') {
+      salaryText = rawSalary.toString().trim();
+    } else {
+      salaryText = null;
+    }
 
     final String matchPct = job['match_percentage']?.toString() ?? '%0';
     atsScore = job['match_score_int'] ??
@@ -80,6 +90,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     final Color scoreColor = atsScore >= 70
         ? const Color(0xFF22C55E)
         : (atsScore >= 40 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444));
+
+    final String rawDesc = (widget.job['description'] ?? widget.job['job_description'] ?? widget.job['snippet'] ?? '').toString();
+    final String cleanDesc = rawDesc.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll('&nbsp;', ' ').trim();
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -125,6 +138,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
             // ─── a) BAŞLIK / ŞİRKET / LOKASYON ───────────────────────────
             _buildJobHeader(),
             const SizedBox(height: 20),
+
+            // ─── YENİ: İŞ AÇIKLAMASI (STRIPPED HTML) ─────────────────────
+
 
             // ─── b) İLAN ÖZETİ ───────────────────────────────────────────
             if (description.isNotEmpty) ...[
@@ -209,6 +225,11 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
   // ─── a) BAŞLIK / ŞİRKET / LOKASYON ─────────────────────────────────────────
   Widget _buildJobHeader() {
+    String? salary = widget.job['salary']?.toString();
+    if (salary != null && (salary.trim().isEmpty || salary.toLowerCase() == 'null')) {
+      salary = null;
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -290,6 +311,29 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     ],
                   ),
                 ],
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: salary == null ? Colors.grey.withValues(alpha: 0.15) : Colors.green.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(salary == null ? Icons.money_off_csred_rounded : Icons.attach_money_rounded, size: 16, color: salary == null ? Colors.grey : Colors.green),
+                      const SizedBox(width: 4),
+                      Text(
+                        salary ?? "Maaş Belirtilmemiş",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: salary == null ? Colors.grey : Colors.green,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -297,6 +341,8 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       ),
     );
   }
+
+
 
   // ─── b) İLAN ÖZETİ (Read More) ──────────────────────────────────────────────
   Widget _buildDescriptionCard() {
@@ -637,8 +683,18 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       );
     }
 
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+
     return FutureBuilder<String?>(
-      future: ApiService.getCoachAdvice(title, matchedSkills, missingSkills, atsScore),
+      future: ApiService.getCoachAdvice(
+        title, 
+        matchedSkills, 
+        missingSkills, 
+        atsScore,
+        userProvider.skills,
+        userProvider.experienceLevel, 
+        lang: Localizations.localeOf(context).languageCode
+      ),
       builder: (context, snapshot) {
         return Container(
           decoration: BoxDecoration(

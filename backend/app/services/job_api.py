@@ -130,6 +130,16 @@ def _to_adzuna_job(job: dict, target_country: str) -> dict:
     }
     normalized = _to_job(raw_job, source="adzuna", raw_desc=job.get("description", ""), target_country=target_country)
     normalized["id"] = f"adzuna:{job.get('id', normalized['id'])}"
+    
+    try:
+        s_min = float(job.get("salary_min") or 0)
+        s_max = float(job.get("salary_max") or 0)
+        if s_min > 0 and s_max > 0:
+            normalized["salary"] = f"{int(s_min)} - {int(s_max)}"
+            print(f"💰 [MAAŞ RADARI] Adzuna İlanı: {job.get('title')} | Maaş: {s_min} - {s_max}")
+    except ValueError:
+        pass
+
     return normalized
 
 
@@ -146,6 +156,9 @@ def _to_careerjet_job(job: dict, target_country: str) -> dict:
 
 
 def _fetch_careerjet_jobs(session: requests.Session) -> list[dict]:
+    print("[*] Careerjet API'si (403 hatası nedeniyle) geçici olarak devre dışı bırakıldı.")
+    return []
+
     if not CAREERJET_API_KEY:
         print("[*] Careerjet atlandı: CAREERJET_API_KEY tanımlı değil.")
         return []
@@ -166,8 +179,8 @@ def _fetch_careerjet_jobs(session: requests.Session) -> list[dict]:
                         "page": 1,
                         "page_size": 50,
                         "sort": "date",
-                        "user_ip": "192.168.1.1",
-                        "user_agent": "CareerLens AI job matching service",
+                        "user_ip": "88.236.45.101",
+                        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
                     },
                     auth=(CAREERJET_API_KEY, ""),
                     timeout=15,
@@ -267,6 +280,12 @@ def _fetch_jooble_jobs(session: requests.Session) -> list[dict]:
             for raw_job in response.json().get("jobs", []):
                 raw_count += 1
                 job = _to_job(raw_job, source="jooble", raw_desc=raw_job.get("snippet", ""), target_country=country)
+                raw_salary = raw_job.get("salary")
+                if raw_salary and str(raw_salary).strip():
+                    job["salary"] = str(raw_salary).strip()
+                    print(f"💰 [JOOBLE MAAŞ RADARI] Jooble İlanı: {job.get('title')} | Maaş: {job['salary']}")
+                else:
+                    job["salary"] = None
                 jobs_by_id[job["id"]] = job
 
     jobs = list(jobs_by_id.values())

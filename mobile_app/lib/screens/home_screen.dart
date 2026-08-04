@@ -4,6 +4,9 @@ import '../core/theme/app_theme.dart';
 import '../widgets/bento_card.dart';
 import '../services/cv_storage_service.dart';
 import '../services/api_service.dart';
+import '../services/settings_service.dart';
+import 'package:provider/provider.dart';
+import '../providers/user_provider.dart';
 import '../services/localization_service.dart';
 import '../services/match_helper.dart';
 import 'job_detail_screen.dart';
@@ -76,11 +79,14 @@ class _HomeScreenState extends State<HomeScreen> {
         default: countryCode = 'ALL';
       }
       
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
       final liveMatches = await ApiService.fetchMatches(
-        skills: activeCv['parsed_skills'] as List<dynamic>?,
+        skills: userProvider.skills,
+        experienceLevel: userProvider.experienceLevel,
         country: countryCode,
         skip: 0,
         limit: 5,
+        lang: Localizations.localeOf(context).languageCode,
       );
       
       activeCv['job_matches'] = liveMatches?['matches'] ?? [];
@@ -446,6 +452,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final String jobId = _jobId(job);
     final bool isBookmarked = _bookmarkedIds.contains(jobId);
     
+    // Maaş bilgisini ayıklayalım
+    String? salaryText;
+    final rawSalary = job['salary'];
+    if (rawSalary != null && rawSalary.toString().trim().isNotEmpty && rawSalary.toString().toLowerCase() != 'null') {
+      salaryText = rawSalary.toString().trim();
+    }
+    
     // Burada da snake_case ve camelCase fallback uygulayalım:
     var jobAtsScore = job['ats_score'] ?? job['atsScore'];
     int matchValue = 0;
@@ -467,15 +480,16 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Container(
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Theme.of(context).dividerColor, width: 1.5), // Görseldeki gibi hafif belirgin sınır
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.3), width: 1), // Minimalist border
           boxShadow: [
             BoxShadow(
               color: Theme.of(context).brightness == Brightness.light
-                  ? Colors.black.withValues(alpha: 0.02)
+                  ? Colors.black.withValues(alpha: 0.025)
                   : Colors.transparent,
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              blurRadius: 24,
+              spreadRadius: -2,
+              offset: const Offset(0, 10),
             )
           ]
       ),
@@ -506,9 +520,49 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(context).textTheme.bodyLarge?.color)),
-                      const SizedBox(height: 6),
-                      Text("$company | ${context.loc('full_time')}", style: AppTheme.captionStyle.copyWith(fontSize: 13, color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.7))),
+                      Text(title, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, letterSpacing: -0.2, height: 1.2, color: Theme.of(context).textTheme.bodyLarge?.color)),
+                      const SizedBox(height: 5),
+                      Text("$company | ${context.loc('full_time')}", style: AppTheme.captionStyle.copyWith(fontSize: 12, fontWeight: FontWeight.w500, color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.7))),
+                      const SizedBox(height: 8),
+                      salaryText != null
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.attach_money_rounded, size: 14, color: Color(0xFF10B981)),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    salaryText,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF10B981),
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.money_off_csred_rounded, size: 14, color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.3)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  "Maaş Belirtilmemiş",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.4),
+                                  ),
+                                ),
+                              ],
+                            ),
                     ],
                   ),
                 ),

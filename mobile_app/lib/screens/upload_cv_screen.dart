@@ -30,7 +30,7 @@ class _UploadCvScreenState extends State<UploadCvScreen> {
       PlatformFile file = result.files.first;
 
       // HATA BURADAYDI: _apiService nesnesini değil, sınıfın kendisini kullanıyoruz:
-      var analysisData = await ApiService.uploadCv(file);
+      var analysisData = await ApiService.uploadCv(file, lang: Localizations.localeOf(context).languageCode);
 
       if (mounted) {
         setState(() {

@@ -236,3 +236,6 @@ zipp==3.23.0
 zstandard==0.25.0
 
 apscheduler==3.10.4
+
+firebase-admin==6.5.0
+google-genai

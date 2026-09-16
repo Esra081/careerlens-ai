@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../core/theme/app_theme.dart';
 import '../services/localization_service.dart';
+import '../services/settings_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
 
@@ -21,6 +22,7 @@ class CareerCoachCard extends StatefulWidget {
 
 class _CareerCoachCardState extends State<CareerCoachCard> {
   bool _isRefreshing = false;
+  String? _overrideAdvice;
 
   Future<void> _refreshAnalysis() async {
     setState(() {
@@ -28,27 +30,44 @@ class _CareerCoachCardState extends State<CareerCoachCard> {
     });
 
     try {
-      final matched = widget.cvData['matched_skills'] ?? [];
-      final missing = widget.cvData['missing_skills'] ?? [];
-      final atsScore = MatchHelper.resolveAtsScore(widget.cvData, widget.cvData['job_matches'] ?? []);
-      
       final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final jobMatches = widget.cvData['job_matches'] as List<dynamic>? ?? [];
+      
+      String targetRole = "Yazılım Geliştirici";
+      List<String> matched = [];
+      List<String> missing = [];
+      int atsScore = MatchHelper.resolveAtsScore(widget.cvData, jobMatches);
+
+      if (jobMatches.isNotEmpty) {
+        final topJob = jobMatches[0];
+        targetRole = (topJob['job_title'] ?? topJob['title'] ?? targetRole).toString();
+        matched = List<String>.from(topJob['matched_skills'] ?? topJob['matchedSkills'] ?? []);
+        missing = List<String>.from(topJob['missing_skills'] ?? topJob['missingSkills'] ?? []);
+      }
+      if (matched.isEmpty) {
+        matched = List<String>.from(widget.cvData['parsed_skills'] ?? userProvider.skills.take(4).toList());
+      }
 
       String? newAdvice = await ApiService.getCoachAdvice(
-        "Software Engineer", 
-        List<String>.from(matched), 
-        List<String>.from(missing), 
+        targetRole, 
+        matched, 
+        missing, 
         atsScore,
         userProvider.skills,
         userProvider.experienceLevel,
-        lang: Localizations.localeOf(context).languageCode
+        lang: settingsService.languageCode,
       );
 
       if (newAdvice != null && mounted) {
+        setState(() {
+          _overrideAdvice = newAdvice;
+        });
         final updatedData = Map<String, dynamic>.from(widget.cvData);
         updatedData['ai_analysis'] = newAdvice;
         await cvStorageService.updateCvData(updatedData, notify: true);
       }
+    } catch (e) {
+      debugPrint("Coach advice refresh error: $e");
     } finally {
       if (mounted) {
         setState(() {
@@ -67,29 +86,31 @@ class _CareerCoachCardState extends State<CareerCoachCard> {
     
     String chanceText = atsScore >= 80 ? 'Yüksek' : (atsScore >= 50 ? 'Riskli' : 'Düşük');
     
-    String skill1 = skills.isNotEmpty ? skills[0] : 'Yazılım';
-    String skill2 = skills.length > 1 ? skills[1] : 'Teknoloji';
+    String skill1 = skills.isNotEmpty ? skills[0] : 'Yazılım Geliştirme';
+    String skill2 = skills.length > 1 ? skills[1] : 'Teknik Altyapı';
     String skill3 = skills.length > 2 ? skills[2] : 'Sistem Mimarisi';
     
     String stackAnalysis = skills.length > 2 
-      ? "CV'nizde **$skill1** ve **$skill2** gibi güçlü yetkinlikler var. Ancak modern pazar sadece bu araçları bilmenizi değil, mimariyi anlamanızı bekler."
-      : "Mevcut yığın (stack) oldukça zayıf duruyor. Temel teknolojilerde derinleşmeniz gerekiyor.";
+      ? "CV'nizde **$skill1** ve **$skill2** gibi güçlü teknik yetkinlikler yer alıyor. Ancak sektör sadece bu araçları bilmenizi değil, mimari tasarımı ve uçtan uca sistem yönetimini kanıtlamanızı bekler."
+      : "Mevcut teknik yığın oldukça kısıtlı görünüyor. Temel teknolojilerde derinleşmeniz ve pratik projelerle bunu kanıtlamanız gerekiyor.";
 
-    return """### 📊 Gerçekçi Uyum Analizi
-ATS skorunuz **%$atsScore**. Bu skorla ilk elemeyi geçme şansınız **$chanceText**.
+    return """### 1. 📊 Gerçekçi Uyum Analizi
+ATS skorunuz **%$atsScore**. Bu skorla ilk teknik elemeyi geçme şansınız **$chanceText**. İlan gereksinimleriyle doğrudan örtüşen kısımlar mevcut olsa da kritik araç ve deneyim boşlukları bulunuyor.
 
-### 💡 Teknik Derinlik
+### 2. 🎯 Kapatılması Gereken Açık & Proje Önerisi
 $stackAnalysis
+Açığı kapatmak için yarın sabah **$skill3** odaklı, REST API entegrasyonu ve Docker konteynerizasyonu içeren uçtan uca bir projeyi GitHub profilinize yüklemelisiniz.
 
-### 🚀 Acil Aksiyon Planı
-Yarın sabah ilk iş olarak **$skill3** üzerine odaklanıp GitHub'a end-to-end bir proje yüklemelisiniz.""";
+### 3. ✍️ CV İyileştirme (STAR Formatı)
+- **Eski Hali:** $skill1 teknolojileriyle projeler geliştirdim.
+- **Olması Gereken Hali:** $skill1 kullanarak mikroservis mimarisinde yüksek verimli API servisleri geliştirdim; sistem yanıt sürelerini %35 oranında optimize ettim.""";
   }
 
   @override
   Widget build(BuildContext context) {
     Map<String, dynamic> adviceData = widget.cvData['career_advice'] ?? {};
     String displayText = "";
-    dynamic rawAnalysis = widget.cvData['ai_analysis'] ?? widget.cvData['summary'];
+    dynamic rawAnalysis = _overrideAdvice ?? widget.cvData['ai_analysis'] ?? widget.cvData['summary'] ?? adviceData['summary'];
 
     if (rawAnalysis != null) {
       String rawString = rawAnalysis.toString().trim();
@@ -108,7 +129,9 @@ Yarın sabah ilk iş olarak **$skill3** üzerine odaklanıp GitHub'a end-to-end 
     if (displayText.isEmpty || 
         displayText.toLowerCase().contains("kullanılamıyor") || 
         displayText.toLowerCase().contains("hata") || 
-        displayText.toLowerCase().contains("error")) {
+        displayText.toLowerCase().contains("error") ||
+        displayText.contains("Realistic Fit Analysis") ||
+        displayText.contains("Here is the critical assessment")) {
       displayText = _generateRealisticAnalysis(widget.cvData);
     }
 
@@ -156,6 +179,17 @@ Yarın sabah ilk iş olarak **$skill3** üzerine odaklanıp GitHub'a end-to-end 
                   ),
                 ),
               ),
+              IconButton(
+                onPressed: _isRefreshing ? null : _refreshAnalysis,
+                icon: _isRefreshing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh_rounded, color: Colors.white, size: 22),
+                tooltip: "Yenile",
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -176,26 +210,7 @@ Yarın sabah ilk iş olarak **$skill3** üzerine odaklanıp GitHub'a end-to-end 
               ),
             ),
           ),
-          if (rawAnalysis == null) ...[
-             const SizedBox(height: 16),
-             Center(
-               child: TextButton.icon(
-                 onPressed: _isRefreshing ? null : _refreshAnalysis,
-                 icon: _isRefreshing 
-                     ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                     : const Icon(Icons.refresh, color: Colors.white),
-                 label: Text(
-                   _isRefreshing ? "Yenileniyor..." : "Analizi Yeniden Getir",
-                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                 ),
-                 style: TextButton.styleFrom(
-                   backgroundColor: Colors.white.withValues(alpha: 0.2),
-                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                 ),
-               ),
-             ),
-          ],
+
 
           if (learningPath.isNotEmpty) ...[
             const SizedBox(height: 24),

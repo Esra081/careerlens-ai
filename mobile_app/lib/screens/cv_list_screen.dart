@@ -4,6 +4,7 @@ import '../core/theme/app_theme.dart';
 import '../services/cv_storage_service.dart';
 import '../services/api_service.dart';
 import '../services/localization_service.dart';
+import '../services/settings_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
 import '../services/match_helper.dart';
@@ -41,35 +42,41 @@ class _CvListScreenState extends State<CvListScreen> {
     if (_isUploading) return; // Çift tıklamayı engelle
 
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx'],
+        allowedExtensions: ['pdf'],
       );
 
+
       if (result != null && result.files.single.path != null) {
+        if (!mounted) return;
         setState(() {
           _isUploading = true;
         });
 
         PlatformFile file = result.files.single;
-        final analysisData = await ApiService.uploadCv(file, lang: Localizations.localeOf(context).languageCode);
+        final analysisData = await ApiService.uploadCv(file, lang: settingsService.languageCode);
+        if (!mounted) return;
 
         if (analysisData != null) {
+          // Önce UserProvider'ı ve SharedPreferences'ı yeni yeteneklerle senkronize et
+          final userProvider = Provider.of<UserProvider>(context, listen: false);
+          await userProvider.syncFromCvData(analysisData);
+
           await cvStorageService.addCv(analysisData, file.name, notify: false);
+          if (!mounted) return;
 
           // --- Anında Eşleşme Tetiklemesi ---
-          // CV eklenir eklenmez, en güncel ilanları çekip CV verisine yaz.
-          // notify: false verdiğimiz için ana ekran tetiklenmeyecek, ta ki updateCvData çalışana kadar.
           try {
-            final userProvider = Provider.of<UserProvider>(context, listen: false);
             final matchResult = await ApiService.fetchMatches(
               skills: userProvider.skills,
               experienceLevel: userProvider.experienceLevel,
               country: 'ALL',
               skip: 0,
               limit: 10,
-              lang: Localizations.localeOf(context).languageCode,
+              lang: settingsService.languageCode,
             );
+            if (!mounted) return;
             if (matchResult != null) {
               final matches = matchResult['matches'] as List<dynamic>? ?? [];
               // Skor hesapla ve CV verisine yaz
@@ -84,6 +91,7 @@ class _CvListScreenState extends State<CvListScreen> {
             }
           } catch (e) {
             debugPrint('İlk eşleşme çekme hatası (CV yükleme sonrası): $e');
+            await cvStorageService.updateCvData(analysisData, notify: true);
           }
 
           await _loadCvs(); // Listeyi yenile
@@ -139,9 +147,22 @@ class _CvListScreenState extends State<CvListScreen> {
       ),
     ) ?? false;
 
-    if (confirm) {
+    if (confirm == true) {
+      if (!mounted) return;
       setState(() => _isLoading = true);
       await cvStorageService.deleteCv(id);
+      if (!mounted) return;
+
+      // Kalan aktif CV verisini UserProvider ile senkronize et
+      final cvData = await cvStorageService.getAnalysisData();
+      if (!mounted) return;
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      if (cvData != null) {
+        await userProvider.syncFromCvData(cvData);
+      } else {
+        await userProvider.clearSkills();
+      }
+
       await _loadCvs();
     }
   }
@@ -151,20 +172,23 @@ class _CvListScreenState extends State<CvListScreen> {
     // 1. Önce notify yapmadan varsayılan seç
     await cvStorageService.setPrimary(id, notify: false);
     
-    // 2. Yeni varsayılan CV'yi çek ve eşleşmeleri kontrol et
+    // 2. Yeni varsayılan CV'yi çek ve UserProvider ile senkronize et
     final cvData = await cvStorageService.getAnalysisData();
+    if (!mounted) return;
     if (cvData != null) {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      await userProvider.syncFromCvData(cvData);
+
       final existingMatches = MatchHelper.getJobMatches(cvData);
       if (existingMatches.isEmpty) {
         try {
-          final userProvider = Provider.of<UserProvider>(context, listen: false);
           final matchResult = await ApiService.fetchMatches(
             skills: userProvider.skills,
             experienceLevel: userProvider.experienceLevel,
             country: 'ALL',
             skip: 0,
             limit: 10,
-            lang: Localizations.localeOf(context).languageCode,
+            lang: settingsService.languageCode,
           );
           if (matchResult != null) {
             final matches = matchResult['matches'] as List<dynamic>? ?? [];

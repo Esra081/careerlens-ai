@@ -3,6 +3,7 @@ import '../core/theme/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/cv_storage_service.dart';
 import '../services/localization_service.dart';
+import '../services/settings_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
 import 'job_detail_screen.dart';
@@ -67,7 +68,6 @@ class _JobListScreenState extends State<JobListScreen> {
     setState(() => _isFetchingMore = true);
     
     try {
-      final storedData = await cvStorageService.getAnalysisData();
       final String countryCode;
       switch (_selectedCountryKey) {
         case 'america': countryCode = 'US'; break;
@@ -85,7 +85,7 @@ class _JobListScreenState extends State<JobListScreen> {
         experience: _selectedExperience,
         workModel: _selectedWorkModel,
         minSalary: _minSalary,
-        lang: Localizations.localeOf(context).languageCode,
+        lang: settingsService.languageCode,
       );
       
       if (!mounted) return;
@@ -120,6 +120,7 @@ class _JobListScreenState extends State<JobListScreen> {
     _skip = 0;
     try {
       final storedData = await cvStorageService.getAnalysisData();
+      if (!mounted) return;
       final String countryCode;
       switch (_selectedCountryKey) {
         case 'america': countryCode = 'US'; break;
@@ -137,7 +138,7 @@ class _JobListScreenState extends State<JobListScreen> {
         experience: _selectedExperience,
         workModel: _selectedWorkModel,
         minSalary: _minSalary,
-        lang: Localizations.localeOf(context).languageCode,
+        lang: settingsService.languageCode,
       );
 
       if (!mounted) return;
@@ -378,6 +379,36 @@ class _JobListScreenState extends State<JobListScreen> {
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         centerTitle: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.sync),
+            tooltip: 'İlanları Güncelle',
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              messenger.showSnackBar(
+                const SnackBar(content: Text('İlan güncelleme isteği gönderiliyor...')),
+              );
+              final response = await ApiService.ingestJobs();
+              if (mounted) {
+                if (response != null && response['status'] == 'success') {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(response['message'] ?? 'İlanlar arka planda güncelleniyor, birazdan listelenecek.'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('İlan güncelleme başlatılamadı.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor))
@@ -611,9 +642,15 @@ class _JobListScreenState extends State<JobListScreen> {
       matchValue = int.tryParse(matchStr) ?? 0;
     }
 
-    final Color scoreColor = matchValue >= 80
-        ? const Color(0xFF22C55E)
-        : (matchValue >= 50 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444));
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final bool hasSkills = userProvider.skills.isNotEmpty;
+    final bool isUnscored = !hasSkills && matchValue == 0;
+
+    final Color scoreColor = isUnscored
+        ? Colors.grey.shade400
+        : (matchValue >= 80
+            ? const Color(0xFF22C55E)
+            : (matchValue >= 50 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444)));
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -748,7 +785,7 @@ class _JobListScreenState extends State<JobListScreen> {
                         width: 48,
                         height: 48,
                         child: CircularProgressIndicator(
-                          value: matchValue / 100,
+                          value: isUnscored ? 0 : matchValue / 100,
                           strokeWidth: 4,
                           backgroundColor: scoreColor.withValues(alpha: 0.12),
                           valueColor: AlwaysStoppedAnimation<Color>(scoreColor),
@@ -756,10 +793,10 @@ class _JobListScreenState extends State<JobListScreen> {
                         ),
                       ),
                       Text(
-                        "%$matchValue",
+                        isUnscored ? "—" : "%$matchValue",
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
-                          fontSize: 11,
+                          fontSize: isUnscored ? 14 : 11,
                           color: scoreColor,
                         ),
                       ),

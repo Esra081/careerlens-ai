@@ -142,3 +142,17 @@ backend/data/
 
 # Eğer uygulamanı Windows'ta masaüstü olarak test ettiysen bu derleme dosyaları çok ağırdır:
 windows/flutter/ephemeral/
+
+# Güvenlik ve Gizli Kimlik Dosyaları (Credentials & Secrets)
+firebase-adminsdk.json
+**/firebase-adminsdk.json
+fcm_token.txt
+**/fcm_token.txt
+user_profile.json
+**/user_profile.json
+user_cv.json
+**/user_cv.json.vs/
+jobs.db
+
+**/.vs/
+.vs/

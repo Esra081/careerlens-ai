@@ -9,6 +9,7 @@ import '../widgets/ats_score_card.dart';
 import '../widgets/skills_radar_chart.dart';
 import '../widgets/career_coach_card.dart';
 import '../services/localization_service.dart';
+import '../services/settings_service.dart';
 
 // Dynamic planner generates steps on the fly based on CV skills
 
@@ -49,8 +50,10 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
 
   Future<void> _loadData() async {
     final hasCv = await cvStorageService.checkHasCv();
+    if (!mounted) return;
     if (hasCv) {
       _cvData = await cvStorageService.getAnalysisData();
+      if (!mounted) return;
       if (_cvData != null) {
         final existingMatches = MatchHelper.getJobMatches(_cvData!);
         if (existingMatches.isEmpty) {
@@ -62,14 +65,16 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
               country: 'ALL',
               skip: 0,
               limit: 10,
-              lang: Localizations.localeOf(context).languageCode,
+              lang: settingsService.languageCode,
             );
+            if (!mounted) return;
             if (result != null) {
               final matches = result['matches'] as List<dynamic>? ?? [];
               final resolvedScore = MatchHelper.resolveAtsScore(_cvData!, matches);
               _cvData!['job_matches'] = matches;
               _cvData!['_resolved_ats_score'] = resolvedScore;
               await cvStorageService.updateCvData(_cvData!);
+              if (!mounted) return;
             }
           } catch (e) {
             debugPrint('AI Koç – eşleşme çekme hatası: $e');
@@ -299,7 +304,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               itemCount: dynamicRoles.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              separatorBuilder: (_, index) => const SizedBox(width: 12),
               itemBuilder: (context, i) =>
                   _buildRoleCard(dynamicRoles[i]),
             ),

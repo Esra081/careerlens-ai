@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
 import '../services/localization_service.dart';
 
+import '../services/auth_service.dart';
+import 'login_screen.dart';
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -21,6 +24,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _handleLogout() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Çıkış Yap"),
+        content: const Text("Hesabınızdan çıkış yapmak istediğinize emin misiniz?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("İptal"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+            child: const Text("Çıkış Yap"),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout == true && mounted) {
+      await authService.logout();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    }
+  }
+
   @override
   void dispose() {
     _skillController.dispose();
@@ -31,24 +65,82 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).primaryColor;
+    final user = authService.currentUser;
     
     return Scaffold(
       appBar: AppBar(
         title: Text(context.loc('profile'), style: const TextStyle(fontWeight: FontWeight.w600)),
         centerTitle: true,
         elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: _handleLogout,
+            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+            tooltip: 'Çıkış Yap',
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: Consumer<UserProvider>(
         builder: (context, userProvider, child) {
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
+            physics: const BouncingScrollPhysics(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Kullanıcı Profil Kartı
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Theme.of(context).dividerColor),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: primaryColor.withValues(alpha: 0.15),
+                        child: Text(
+                          (user?.fullName.isNotEmpty == true ? user!.fullName[0] : "E").toUpperCase(),
+                          style: TextStyle(
+                            color: primaryColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 22,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user?.fullName ?? "Esra Kılıç",
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              user?.email ?? "esra@example.com",
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 28),
+
                 Text(
                   context.loc('experience_level'),
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
+
                 const SizedBox(height: 16),
                 Wrap(
                   spacing: 12,
@@ -64,7 +156,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           userProvider.setExperienceLevel(providerLevel);
                         }
                       },
-                      selectedColor: primaryColor.withOpacity(0.2),
+                      selectedColor: primaryColor.withValues(alpha: 0.2),
                       labelStyle: TextStyle(
                         color: isSelected 
                             ? primaryColor 
@@ -74,7 +166,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                         side: BorderSide(
-                          color: isSelected ? primaryColor : Colors.grey.withOpacity(0.3),
+                          color: isSelected ? primaryColor : Colors.grey.withValues(alpha: 0.3),
                         ),
                       ),
                     );
@@ -118,11 +210,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           : Colors.grey[100],
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                        side: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
                       ),
                     );
                   }).toList(),
                 ),
+                const SizedBox(height: 32),
               ],
             ),
           );
@@ -130,4 +223,5 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
 }

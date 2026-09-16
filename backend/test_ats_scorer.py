@@ -43,7 +43,7 @@ def test_dynamic_scorer():
     assert "missing_skills" in result
     assert "details" in result
     
-    print("\n✅ Dynamic ATS Score test passed successfully.")
+    print("\n[SUCCESS] Dynamic ATS Score test passed successfully.")
 
 if __name__ == "__main__":
     test_dynamic_scorer()

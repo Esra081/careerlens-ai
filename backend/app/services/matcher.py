@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import chromadb
@@ -92,7 +93,49 @@ def calculate_job_match(
     SQLite + ChromaDB'den okunur.
     """
     if not cv_skills:
-        return 0, []
+        # Kullanıcı henüz CV yüklemediğinde veya yetenekler boşken
+        # SQLite'taki en güncel ilanları sayfalanmış olarak döndür
+        page = (skip // limit) + 1 if limit > 0 else 1
+        total, raw_jobs = job_repository.list_jobs(
+            country=country if country and country.upper() != "ALL" else None,
+            page=page,
+            page_size=limit,
+        )
+        fallback_results = []
+        for job in raw_jobs:
+            req_skills = job.get("required_skills")
+            if isinstance(req_skills, str):
+                try:
+                    req_skills = json.loads(req_skills)
+                except Exception:
+                    req_skills = []
+            elif not isinstance(req_skills, list):
+                req_skills = []
+
+            raw_url = job.get("apply_url") or job.get("link")
+            clean_url = raw_url.strip() if raw_url else None
+
+            fallback_results.append({
+                "id": job.get("id"),
+                "job_title": job.get("title", "Pozisyon Belirtilmemiş"),
+                "company": job.get("company", "Şirket Belirtilmemiş"),
+                "location": job.get("location", "Türkiye"),
+                "url": clean_url,
+                "published_at": job.get("published_at", ""),
+                "match_score_int": 0,
+                "match_percentage": "%0",
+                "matched_skills": [],
+                "missing_skills": req_skills,
+                "ats_details": {
+                    "ats_score": 0,
+                    "matched_skills": [],
+                    "missing_skills": req_skills,
+                    "details": {},
+                },
+                "salary": job.get("salary"),
+                "description": str(job.get("description") or ""),
+            })
+        return total, fallback_results
 
     # ChromaDB boşsa (hiç ingest yapılmamışsa) kullanıcıya bilgi ver
     total_in_db = _collection.count()
@@ -127,10 +170,6 @@ def calculate_job_match(
         where=where_filter if where_filter else None,
     )
 
-    # SQLite'tan tam ilan bilgilerini al (location, skills vs.)
-    all_jobs = job_repository.all_jobs_for_matching()
-    jobs_by_id = {job["id"]: job for job in all_jobs}
-
     match_results = []
     if results["ids"] and len(results["ids"][0]) > 0:
         # ChromaDB sonuçları zaten uzaklığa (distances) göre küçükten büyüğe sıralıdır.
@@ -141,7 +180,12 @@ def calculate_job_match(
         page_metadatas = results["metadatas"][0][skip:]
         page_distances = results["distances"][0][skip:]
 
+        # Sadece bu sayfadaki ilanları SQLite'tan verimli tek bir sorguyla alıyoruz
+        fetched_jobs = job_repository.get_jobs_by_ids(page_ids)
+        jobs_by_id = {job["id"]: job for job in fetched_jobs}
+
         for i in range(len(page_ids)):
+
             job_id = page_ids[i]
             metadata = page_metadatas[i]
             distance = page_distances[i]

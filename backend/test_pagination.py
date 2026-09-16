@@ -13,7 +13,7 @@ def test_pagination():
     print("Testing /api/v1/matches endpoint with pagination...")
     
     # We will pass dummy skills
-    response = client.get("/api/v1/matches?skills=Python,React&limit=5&skip=0")
+    response = client.post("/api/v1/matches", json={"skills": ["Python", "React"], "limit": 5, "skip": 0})
     
     assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
     
@@ -47,7 +47,7 @@ def test_pagination():
     assert len(job_data["jobs"]) <= 5
     print("Jobs pagination works correctly.")
     
-    print("\n✅ All pagination tests passed!")
+    print("\n[SUCCESS] All pagination tests passed!")
 
 if __name__ == "__main__":
     test_pagination()

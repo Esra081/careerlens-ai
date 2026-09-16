@@ -4,7 +4,6 @@ import '../core/theme/app_theme.dart';
 import '../widgets/bento_card.dart';
 import '../services/cv_storage_service.dart';
 import '../services/api_service.dart';
-import '../services/settings_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
 import '../services/localization_service.dart';
@@ -12,6 +11,7 @@ import '../services/match_helper.dart';
 import 'job_detail_screen.dart';
 import 'upload_cv_screen.dart';
 import 'settings_screen.dart';
+import '../services/settings_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -31,6 +31,13 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadBookmarks();
     cvStorageService.addListener(_onStorageChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final activeCv = cvStorageService.activeCv;
+      final matches = activeCv?['job_matches'] as List<dynamic>? ?? [];
+      if (matches.isEmpty) {
+        _refreshData();
+      }
+    });
   }
 
   void _onStorageChanged() {
@@ -45,7 +52,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadBookmarks() async {
     final ids = await cvStorageService.getBookmarkedIds();
-    if (mounted) setState(() => _bookmarkedIds = ids);
+    if (mounted) {
+      setState(() => _bookmarkedIds = ids);
+    }
   }
 
   Future<void> _toggleBookmark(String jobId) async {
@@ -86,11 +95,16 @@ class _HomeScreenState extends State<HomeScreen> {
         country: countryCode,
         skip: 0,
         limit: 5,
-        lang: Localizations.localeOf(context).languageCode,
+        lang: settingsService.languageCode,
       );
+      if (!mounted) return;
       
-      activeCv['job_matches'] = liveMatches?['matches'] ?? [];
+      final matches = liveMatches?['matches'] as List<dynamic>? ?? [];
+      activeCv['job_matches'] = matches;
+      final resolvedScore = MatchHelper.resolveAtsScore(activeCv, matches);
+      activeCv['_resolved_ats_score'] = resolvedScore;
       await cvStorageService.updateCvData(activeCv, notify: true);
+      if (!mounted) return;
     } catch (e) {
       debugPrint("Error refreshing matches: $e");
     } finally {
@@ -607,7 +621,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () async {
-                      print('DEBUG - KARTTAYKI VERİLER: ${job.keys}');
+                      debugPrint('DEBUG - KARTTAYKI VERİLER: ${job.keys}');
                       final rawUrl = job['url'] ?? job['link'] ?? job['apply_url'] ?? job['redirect_url'] ?? job['job_url'] ?? job['jobUrl'];
                       if (rawUrl != null && rawUrl.toString().isNotEmpty) {
                         String finalUrl = rawUrl.toString().trim().replaceAll(' ', '%20');
@@ -615,7 +629,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           finalUrl = 'https://$finalUrl';
                         }
                         
-                        print('DEBUG - ANASAYFA URL DENENİYOR: $finalUrl');
+                        debugPrint('DEBUG - ANASAYFA URL DENENİYOR: $finalUrl');
                         
                         try {
                           final uri = Uri.tryParse(finalUrl);
@@ -908,4 +922,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
+

@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -42,6 +43,25 @@ def initialize() -> None:
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_jobs_filters ON jobs(country, published_at, source)"
         )
+        
+        # Kullanıcılar tablosu (Auth Sistemi)
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                hashed_password TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                fcm_token TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)"
+        )
+
 
 
 def upsert_jobs(jobs: list[dict]) -> int:
@@ -164,3 +184,105 @@ def last_refresh_at() -> str | None:
     initialize()
     with _connection() as connection:
         return connection.execute("SELECT MAX(fetched_at) FROM jobs").fetchone()[0]
+
+
+def get_jobs_by_ids(job_ids: list[str]) -> list[dict]:
+    """Belirli ID'lere sahip ilanları SQLite'tan tek bir verimli sorguyla çeker."""
+    if not job_ids:
+        return []
+    initialize()
+    placeholders = ",".join(["?"] * len(job_ids))
+    with _connection() as connection:
+        rows = connection.execute(
+            f"""
+            SELECT id, source, title, company, location, country, description,
+                   apply_url, required_skills, published_at, fetched_at, salary
+            FROM jobs
+            WHERE id IN ({placeholders})
+            """,
+            job_ids,
+        ).fetchall()
+
+    return [
+        {
+            "id": row["id"],
+            "title": row["title"],
+            "company": row["company"],
+            "location": row["location"],
+            "country": row["country"],
+            "required_skills": json.loads(row["required_skills"]),
+            "description": row["description"] or "",
+            "link": row["apply_url"],
+            "published_at": row["published_at"] or row["fetched_at"] or "",
+            "salary": row["salary"],
+        }
+        for row in rows
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Kullanıcı Yönetimi (Auth Sistemi)
+# ---------------------------------------------------------------------------
+
+def create_user(email: str, hashed_password: str, full_name: str) -> dict:
+    """Yeni kullanıcı oluşturur ve veritabanına kaydeder."""
+    initialize()
+    user_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    clean_email = email.strip().lower()
+
+    with _connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO users (id, email, hashed_password, full_name, fcm_token, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (user_id, clean_email, hashed_password, full_name.strip(), None, now, now),
+        )
+
+    return {
+        "id": user_id,
+        "email": clean_email,
+        "full_name": full_name.strip(),
+        "created_at": now,
+    }
+
+
+def get_user_by_email(email: str) -> dict | None:
+    """E-posta adresine göre kullanıcı kaydını döner (şifre doğrulaması için hash dahil)."""
+    initialize()
+    clean_email = email.strip().lower()
+    with _connection() as connection:
+        row = connection.execute(
+            "SELECT id, email, hashed_password, full_name, fcm_token, created_at FROM users WHERE email = ?",
+            (clean_email,),
+        ).fetchone()
+        if row:
+            return dict(row)
+    return None
+
+
+def get_user_by_id(user_id: str) -> dict | None:
+    """ID'ye göre kullanıcı kaydını döner (şifre hash'i hariç)."""
+    initialize()
+    with _connection() as connection:
+        row = connection.execute(
+            "SELECT id, email, full_name, fcm_token, created_at FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if row:
+            return dict(row)
+    return None
+
+
+def update_user_fcm_token(user_id: str, fcm_token: str) -> bool:
+    """Kullanıcının FCM bildirim token'ını günceller."""
+    initialize()
+    now = datetime.now(timezone.utc).isoformat()
+    with _connection() as connection:
+        cursor = connection.execute(
+            "UPDATE users SET fcm_token = ?, updated_at = ? WHERE id = ?",
+            (fcm_token.strip(), now, user_id),
+        )
+        return cursor.rowcount > 0
+

@@ -4,6 +4,9 @@ import '../services/cv_storage_service.dart';
 import 'main_layout.dart';
 import 'upload_cv_screen.dart';
 
+import '../services/auth_service.dart';
+import 'login_screen.dart';
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -19,28 +22,38 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkFirstScreen() async {
-    // Uygulama açıldığında ekranda 1.5 saniye logonun görünmesi için kısa bir bekleme (Gerçekçi hissettirir)
-    await Future.delayed(const Duration(milliseconds: 1500));
+    // Uygulama açıldığında logonun görünmesi için kısa bekleme
+    await Future.delayed(const Duration(milliseconds: 1200));
 
-    // Hafızayı kontrol et: CV yüklü mü?
+    if (!mounted) return;
+
+    // 1. Önce Oturum Kontrolü (Giriş yapılmış mı?)
+    if (!authService.isLoggedIn) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+      return;
+    }
+
+    // 2. Giriş yapılmışsa CV kontrolü
     bool hasCv = await cvStorageService.checkHasCv();
 
-    if (mounted) {
-      if (hasCv) {
-        // DURUM 1: CV daha önceden yüklenmişse direkt Ana İskelete (Dashboard vb.) yönlendir
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainLayout()),
-        );
-      } else {
-        // DURUM 2: CV hiç yüklenmemişse direkt CV Yükleme ekranına yönlendir
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const UploadCvScreen()),
-        );
-      }
+    if (!mounted) return;
+
+    if (hasCv) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const MainLayout()),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const UploadCvScreen()),
+      );
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

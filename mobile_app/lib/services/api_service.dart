@@ -1,28 +1,144 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
+import '../models/user_model.dart';
 
 class ApiService {
   // Sınıf seviyesinde statik bir Dio instance'ı
-  static final Dio _dio = Dio();
-  // Fiziksel telefon için bilgisayarın yerel IP'si kullanılır. Emülatörde
-  // `--dart-define=API_BASE_URL=http://10.0.2.2:8000` ile değiştirilebilir.
-  static const String _baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://192.168.1.102:8000',
+  static final Dio _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 20),
+      receiveTimeout: const Duration(seconds: 60),
+      sendTimeout: const Duration(seconds: 20),
+    ),
   );
+  // Backend Base URL
+  // Android Studio Emülatörü için bilgisayarın localhost'una '10.0.2.2' ile erişilir.
+  // Fiziksel telefonda çalıştırırken: --dart-define=API_BASE_URL=http://<PC_IP>:8000 verilebilir.
+  static String get _baseUrl {
+    const definedUrl = String.fromEnvironment('API_BASE_URL');
+    if (definedUrl.isNotEmpty) return definedUrl;
 
-  // --- CV YÜKLEME ---
-  static Future<void> sendFcmToken(String token) async {
-    try {
-      await _dio.post(
-        "$_baseUrl/api/v1/fcm-token",
-        data: {"token": token},
-      );
-    } catch (e) {
-      print("Token gönderim hatası: $e");
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8000'; // Android Studio Emülatörü
+    }
+    return 'http://127.0.0.1:8000'; // Windows Desktop / Web / iOS Simülatör
+  }
+
+
+  static String? _authToken;
+
+  static void setAuthToken(String? token) {
+    _authToken = token;
+    if (token != null && token.isNotEmpty) {
+      _dio.options.headers['Authorization'] = 'Bearer $token';
+    } else {
+      _dio.options.headers.remove('Authorization');
     }
   }
+
+  // ─── AUTHENTICATION (KULLANICI İŞLEMLERİ) ──────────────────────────────────
+
+  static Future<Map<String, dynamic>> register(String fullName, String email, String password) async {
+    try {
+      final response = await _dio.post(
+        "$_baseUrl/api/v1/auth/register",
+        data: {
+          "full_name": fullName,
+          "email": email,
+          "password": password,
+        },
+      );
+      if (response.statusCode == 201) {
+        final data = response.data as Map<String, dynamic>;
+        final token = data['access_token'] as String;
+        final user = UserModel.fromJson(data['user'] as Map<String, dynamic>);
+        return {
+          'success': true,
+          'token': token,
+          'user': user,
+        };
+      }
+      return {'success': false, 'message': 'Kayıt başarısız.'};
+    } on DioException catch (e) {
+      String msg = 'Kayıt olurken bir hata oluştu.';
+      if (e.response?.data is Map && e.response?.data['detail'] != null) {
+        msg = e.response?.data['detail'].toString() ?? msg;
+      } else if (e.response == null) {
+        msg = 'Sunucuya bağlanılamadı. Lütfen backend servisinin (uvicorn) çalıştığından emin olun.';
+      }
+      return {'success': false, 'message': msg};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> login(String email, String password) async {
+    try {
+      final response = await _dio.post(
+        "$_baseUrl/api/v1/auth/login",
+        data: {
+          "email": email,
+          "password": password,
+        },
+      );
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        final token = data['access_token'] as String;
+        final user = UserModel.fromJson(data['user'] as Map<String, dynamic>);
+        return {
+          'success': true,
+          'token': token,
+          'user': user,
+        };
+      }
+      return {'success': false, 'message': 'Giriş başarısız.'};
+    } on DioException catch (e) {
+      String msg = 'Giriş yapılırken bir hata oluştu.';
+      if (e.response?.data is Map && e.response?.data['detail'] != null) {
+        msg = e.response?.data['detail'].toString() ?? msg;
+      } else if (e.response == null) {
+        msg = 'Sunucuya bağlanılamadı. Lütfen backend servisinin (uvicorn) çalıştığından emin olun.';
+      }
+      return {'success': false, 'message': msg};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  static Future<UserModel?> getCurrentUser() async {
+    try {
+      final response = await _dio.get("$_baseUrl/api/v1/auth/me");
+      if (response.statusCode == 200) {
+        return UserModel.fromJson(response.data as Map<String, dynamic>);
+      }
+    } catch (e) {
+      debugPrint("Kullanıcı profili alınamadı: $e");
+    }
+    return null;
+  }
+
+  // --- FCM TOKEN KAYDETME ---
+  static Future<void> sendFcmToken(String token) async {
+    try {
+      // Eğer kullanıcı giriş yapmışsa kullanıcıya özel auth endpoint'ine de yolla
+      if (_authToken != null) {
+        await _dio.post(
+          "$_baseUrl/api/v1/auth/fcm-token",
+          data: {"fcm_token": token},
+        );
+      } else {
+        await _dio.post(
+          "$_baseUrl/api/v1/fcm-token",
+          data: {"token": token},
+        );
+      }
+    } catch (e) {
+      debugPrint("Token gönderim hatası: $e");
+    }
+  }
+
 
   static Future<Map<String, dynamic>?> uploadCv(PlatformFile file, {String lang = 'tr'}) async {
     try {
@@ -50,11 +166,16 @@ class ApiService {
             returnData = Map<String, dynamic>.from(returnData);
           }
 
-          // Brute-force AI Analysis extraction
-          dynamic rawAnalysis = response.data['ai_analysis'] 
+          // Extract AI Analysis text cleanly
+          dynamic adviceObj = returnData['career_advice'] ?? response.data['career_advice'];
+          String? summaryFromAdvice;
+          if (adviceObj is Map && adviceObj['summary'] != null) {
+            summaryFromAdvice = adviceObj['summary'].toString();
+          }
+
+          dynamic rawAnalysis = summaryFromAdvice
+                             ?? response.data['ai_analysis'] 
                              ?? returnData['ai_analysis'] 
-                             ?? response.data['career_advice'] 
-                             ?? returnData['career_advice'] 
                              ?? response.data['summary'] 
                              ?? returnData['summary'];
           
@@ -76,7 +197,7 @@ class ApiService {
       }
       return null;
     } catch (e) {
-      print("Dosya yükleme hatası: $e");
+      debugPrint("Dosya yükleme hatası: $e");
       return null;
     }
   }
@@ -139,7 +260,20 @@ class ApiService {
         }
       }
     } catch (e) {
-      print("API Bağlantı Hatası (Matches): $e");
+      debugPrint("API Bağlantı Hatası (Matches): $e");
+    }
+    return null;
+  }
+
+  // --- İLANLARI DIŞ KAYNAKTAN GÜNCELLE (INGEST) ---
+  static Future<Map<String, dynamic>?> ingestJobs() async {
+    try {
+      Response response = await _dio.post("$_baseUrl/api/v1/jobs/ingest");
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+    } catch (e) {
+      debugPrint("API Bağlantı Hatası (Ingest): $e");
     }
     return null;
   }
@@ -165,7 +299,7 @@ class ApiService {
         return response.data['coach_advice'];
       }
     } catch (e) {
-      print("AI Coach API Hatası: $e");
+      debugPrint("AI Coach API Hatası: $e");
     }
     return null;
   }

@@ -1,8 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from app.services.ai_service import rewrite_cv_bullet, generate_ai_career_coach
-import traceback
-traceback.print_exc()
 
 router = APIRouter()
 

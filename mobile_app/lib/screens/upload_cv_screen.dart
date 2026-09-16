@@ -3,7 +3,10 @@ import 'package:file_picker/file_picker.dart';
 import '../core/theme/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/cv_storage_service.dart';
-import 'main_layout.dart'; // Yönlendirme için eklendi
+import '../services/settings_service.dart';
+import 'package:provider/provider.dart';
+import '../providers/user_provider.dart';
+import 'main_layout.dart';
 
 class UploadCvScreen extends StatefulWidget {
   const UploadCvScreen({super.key});
@@ -17,10 +20,11 @@ class _UploadCvScreenState extends State<UploadCvScreen> {
 
   // Dosya seçme ve gönderme fonksiyonu
   Future<void> _pickAndUploadFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
+    FilePickerResult? result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx'],
+      allowedExtensions: ['pdf'],
     );
+
 
     if (result != null) {
       setState(() {
@@ -29,8 +33,7 @@ class _UploadCvScreenState extends State<UploadCvScreen> {
 
       PlatformFile file = result.files.first;
 
-      // HATA BURADAYDI: _apiService nesnesini değil, sınıfın kendisini kullanıyoruz:
-      var analysisData = await ApiService.uploadCv(file, lang: Localizations.localeOf(context).languageCode);
+      var analysisData = await ApiService.uploadCv(file, lang: settingsService.languageCode);
 
       if (mounted) {
         setState(() {
@@ -38,6 +41,9 @@ class _UploadCvScreenState extends State<UploadCvScreen> {
         });
 
         if (analysisData != null) {
+          final userProvider = Provider.of<UserProvider>(context, listen: false);
+          await userProvider.syncFromCvData(analysisData);
+
           await cvStorageService.addCv(analysisData, file.name);
 
           if (!mounted) return;
@@ -119,9 +125,10 @@ class _UploadCvScreenState extends State<UploadCvScreen> {
                     Icon(Icons.add_circle_outline, color: Colors.white),
                     SizedBox(width: 12),
                     Text(
-                      "CV Yükle (PDF, DOCX)",
+                      "CV Yükle (PDF)",
                       style: AppTheme.buttonTextStyle,
                     ),
+
                   ],
                 ),
               ),

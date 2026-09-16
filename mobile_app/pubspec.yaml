@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.12.2
+  sdk: ^3.7.0
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -30,34 +30,31 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  file_picker: ^10.3.3
-  dio: ^5.10.0
-  fl_chart: ^1.2.0
-  percent_indicator: ^4.2.5
-  shared_preferences: ^2.5.5
-  path_provider: ^2.1.6
-  google_fonts: ^6.2.1
-  flutter_markdown: ^0.7.7
-  url_launcher: ^6.3.2
-  firebase_core: ^4.12.1
-  firebase_messaging: ^16.4.3
-  provider: ^6.1.5+1
+  file_picker: any
+  dio: any
+  fl_chart: 0.69.2
+  percent_indicator: any
+  shared_preferences: any
+  path_provider: any
+  google_fonts: any
+  flutter_markdown: any
+  url_launcher: any
+  firebase_core: any
+  firebase_messaging: any
+  provider: any
 
 dev_dependencies:
-  flutter_launcher_icons: ^0.13.1
+  flutter_launcher_icons: any
   flutter_test:
     sdk: flutter
 
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
-  flutter_lints: ^6.0.0
+  flutter_lints: any
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

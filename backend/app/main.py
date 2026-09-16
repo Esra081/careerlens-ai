@@ -1,9 +1,34 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+import sys
+import os
+import subprocess
+from pathlib import Path
+
+# 1. Backend ve sanal ortam (venv) yollarını tespit et
+backend_dir = Path(__file__).resolve().parent.parent
+venv_python = backend_dir / "venv" / "Scripts" / "python.exe"
+
+# 2. Eğer dosya VS Code veya terminalde sistem Python'ı ile çalıştırıldıysa,
+# doğrudan projenin tüm paketlerinin kurulu olduğu 'backend/venv' ortamına devret!
+if venv_python.exists():
+    current_exe = Path(sys.executable).resolve()
+    target_exe = venv_python.resolve()
+    if current_exe != target_exe:
+        print(f"[CareerLens AI] Sanal ortam otomatik aktive ediliyor: {target_exe}")
+        try:
+            result = subprocess.run([str(target_exe)] + sys.argv)
+            sys.exit(result.returncode)
+        except KeyboardInterrupt:
+            sys.exit(0)
+
+# 3. Backend dizinini sys.path'e otomatik ekle (app paketinin her zaman bulunabilmesi için)
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 import json
-import os
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -15,9 +40,10 @@ from app.services.job_api import fetch_real_jobs
 from app.services import job_repository
 from app.services.notification_service import init_firebase, send_job_match_notification
 from app.routers.cv_router import router as cv_router
+from app.routers.auth_router import router as auth_router
 from pydantic import BaseModel
 
-app = FastAPI(title="CareerLens AI", version="0.2.0")
+app = FastAPI(title="CareerLens AI", version="0.3.0")
 
 # Flutter (Mobil/Web) üzerinden gelecek isteklere izin vermek için CORS ayarı
 app.add_middleware(
@@ -28,8 +54,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# AI yardımcı endpoint'lerini bağla (/api/v1/ai/rewrite, /api/v1/ai/coach)
+# Router'ları bağla
+app.include_router(auth_router)
 app.include_router(cv_router)
+
 
 PROFILE_FILE = "user_profile.json"
 
@@ -131,11 +159,16 @@ async def upload_cv(file: UploadFile = File(...)):
     try:
         file_bytes = await file.read()
         raw_text = extract_text_from_pdf(file_bytes)
-        extracted_skills = extract_skills(raw_text)
+        extracted_data = extract_skills(raw_text)
+        extracted_skills = extracted_data.get("skills") or []
+        experience_level = extracted_data.get("experience_level") or "Junior"
 
-        return {"message": "CV başarıyla kaydedildi.", "skills": extracted_skills}
+        return {"message": "CV başarıyla kaydedildi.", "skills": extracted_skills, "experience_level": experience_level}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"CV Yükleme Hatası: {str(e)}")
+
 
 
 class MatchRequest(BaseModel):
@@ -152,13 +185,8 @@ class MatchRequest(BaseModel):
 @app.post("/api/v1/matches")
 async def get_matches(request: MatchRequest):
     """Kullanıcının yeteneklerine göre iş ilanı eşleşmelerini döndürür."""
-    # profile.json'a yazma işlemini TAMAMEN SİL.
     user_skills = [skill.strip() for skill in request.skills if skill.strip()]
-    
-    if not user_skills:
-        return {"error": "Lütfen önce yeteneklerinizi belirleyin."}
-
-    raw_text = " ".join(user_skills)
+    raw_text = " ".join(user_skills) if user_skills else ""
 
     total_matches, all_matches = calculate_job_match(
         cv_skills=user_skills,
@@ -194,29 +222,27 @@ def get_all_jobs(skip: int = 0, limit: int = 50):
     }
 
 
+def _run_ingestion():
+    """Arka planda çalışan asıl ilan çekme fonksiyonu."""
+    print("[Ingest] Arka plan işlemi başladı.")
+    try:
+        jobs = fetch_real_jobs()
+        upserted = job_repository.upsert_jobs(jobs)
+        embedded = refresh_embeddings()
+        print(f"[Ingest] Başarılı: {len(jobs)} çekildi, {upserted} yazıldı, {embedded} embed edildi.")
+    except Exception as e:
+        print(f"[Ingest] Hata oluştu: {str(e)}")
+
 @app.post("/api/v1/jobs/ingest")
-def ingest_jobs():
+def ingest_jobs(background_tasks: BackgroundTasks):
     """Harici API'lerden ilanları çeker, SQLite'a yazar ve embedding'leri günceller.
-
-    Bu endpoint ağır bir işlemdir (~15 HTTP çağrısı + embedding hesaplama).
-    Normalde günde 1-2 kez veya ihtiyaç duyulduğunda çağrılır;
-    kullanıcı istekleri sırasında DEĞİL.
+    İşlemi arka plana delege edip hemen yanıt döner.
     """
-    # 1. Harici API'lerden ilanları çek
-    jobs = fetch_real_jobs()
-
-    # 2. SQLite'a kaydet (upsert)
-    upserted = job_repository.upsert_jobs(jobs)
-
-    # 3. ChromaDB embedding'lerini yenile
-    embedded = refresh_embeddings()
-
+    background_tasks.add_task(_run_ingestion)
+    
     return {
         "status": "success",
-        "fetched_from_apis": len(jobs),
-        "upserted_to_db": upserted,
-        "embeddings_refreshed": embedded,
-        "total_in_db": job_repository.job_count(),
+        "message": "İlan güncelleme arka planda başlatıldı."
     }
 
 
@@ -234,7 +260,9 @@ async def analyze_cv_endpoint(file: UploadFile = File(...), country: str = "ALL"
         raw_text = extract_text_from_pdf(file_bytes)
 
         # 3. Yetenekleri çıkar (extractor.py)
-        extracted_skills = extract_skills(raw_text)
+        extracted_data = extract_skills(raw_text)
+        extracted_skills = extracted_data.get("skills") or []
+        experience_level = extracted_data.get("experience_level") or "Junior"
 
         # 4. İş Eşleştirmesi Yap (matcher.py)
         # Sadece en iyi 3 eşleşme için limit veriyoruz
@@ -248,21 +276,34 @@ async def analyze_cv_endpoint(file: UploadFile = File(...), country: str = "ALL"
 
         # 6. AI Kariyer Tavsiyesi Al (ai_service.py)
         # Sadece en iyi eşleşen ilan için tavsiye üretiyoruz
-        career_advice = generate_career_advice(job_matches, target_language=lang)
+        career_advice = generate_career_advice(
+            job_matches,
+            lang=lang,
+            skills=extracted_skills,
+            experience_level=experience_level,
+        )
 
         # Sonuçları JSON olarak dön
         return {
             "status": "success",
             "data": {
                 "parsed_skills": extracted_skills,
+                "experience_level": experience_level,
                 "ats_score": ats_result,
                 "job_matches": job_matches,
                 "career_advice": career_advice,
             },
         }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
+        print(f"ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"CV Analiz Hatası: {str(e)}")
 
 
+
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True, app_dir=str(backend_dir))
+

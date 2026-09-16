@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'screens/splash_screen.dart';
 import 'core/theme/app_theme.dart';
 import 'services/settings_service.dart';
-
 import 'services/cv_storage_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -11,32 +11,39 @@ import 'services/api_service.dart';
 import 'package:provider/provider.dart';
 import 'providers/user_provider.dart';
 
+import 'services/auth_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Firebase Başlatma
   await Firebase.initializeApp();
   
+  // Oturum ve Ayarları Başlatma
+  await authService.init();
+  await settingsService.loadSettings();
+  await cvStorageService.init();
+
   // İzin ve Token Alma
   FirebaseMessaging messaging = FirebaseMessaging.instance;
   await messaging.requestPermission();
   
   final fcmToken = await messaging.getToken();
-  print('================ FCM TOKEN ================');
-  print(fcmToken);
-  print('===========================================');
+  debugPrint('================ FCM TOKEN ================');
+  debugPrint(fcmToken);
+  debugPrint('===========================================');
   
   if (fcmToken != null) {
-    await ApiService.sendFcmToken(fcmToken);
+    ApiService.sendFcmToken(fcmToken).catchError((e) {
+      debugPrint('FCM Token gönderme hatası: $e');
+    });
   }
   
   // Ön Plan Dinleyicisi
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    print('ÖN PLANDA BİLDİRİM GELDİ: ${message.notification?.title}');
+    debugPrint('ÖN PLANDA BİLDİRİM GELDİ: ${message.notification?.title}');
   });
 
-  await settingsService.loadSettings();
-  await cvStorageService.init();
   
   runApp(
     MultiProvider(
@@ -59,6 +66,18 @@ class CareerLensApp extends StatelessWidget {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'CareerLens',
+          locale: Locale(settingsService.languageCode),
+          supportedLocales: const [
+            Locale('tr', 'TR'),
+            Locale('tr'),
+            Locale('en', 'US'),
+            Locale('en'),
+          ],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
           themeMode: settingsService.themeMode,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(

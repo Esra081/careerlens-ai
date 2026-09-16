@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 import '../services/cv_storage_service.dart';
 import '../services/localization_service.dart';
+import '../services/settings_service.dart';
 import '../widgets/coach_markdown_view.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
@@ -91,9 +92,6 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         ? const Color(0xFF22C55E)
         : (atsScore >= 40 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444));
 
-    final String rawDesc = (widget.job['description'] ?? widget.job['job_description'] ?? widget.job['snippet'] ?? '').toString();
-    final String cleanDesc = rawDesc.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll('&nbsp;', ' ').trim();
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -178,7 +176,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                   finalUrl = 'https://$finalUrl';
                 }
                 
-                print('DEBUG - AÇILMAYA ÇALIŞILAN URL: $finalUrl');
+                debugPrint('DEBUG - AÇILMAYA ÇALIŞILAN URL: $finalUrl');
                 
                 try {
                   final uri = Uri.tryParse(finalUrl);
@@ -693,7 +691,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         atsScore,
         userProvider.skills,
         userProvider.experienceLevel, 
-        lang: Localizations.localeOf(context).languageCode
+        lang: settingsService.languageCode
       ),
       builder: (context, snapshot) {
         return Container(
